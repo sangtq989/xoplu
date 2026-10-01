@@ -85,6 +85,9 @@ button.danger { color: var(--bad); }
   color: var(--text-2); background: var(--surface); margin-bottom: 16px;
 }
 .drop.over { border-color: var(--accent); background: var(--surface-2); }
+.link-row { display: flex; gap: 8px; max-width: 760px; margin: 12px auto 0; }
+.link-row input { flex: 1; min-width: 0; }
+.link-row button[hidden] { display: none; }
 .drop strong { color: var(--text); }
 .filters { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-bottom: 16px; }
 .fgroup { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
@@ -296,6 +299,11 @@ tr.sel td { background: var(--surface-2); }
       Mỗi sheet là một brand (tên sheet = brand), mỗi khối “Thời gian bắt đầu · Thời lượng · Engaged Viewers · Đơn hàng · Doanh số” là một nền tảng/tháng, tháng mới thêm sang phải.
       Cột <b>“Nhân sự”</b> ngay bên trái mỗi khối ghi người live của từng phiên. Brand + nền tảng + tháng nào có trong file sẽ thay thế dữ liệu cũ của đúng phần đó; phần khác được giữ lại.
     </div>
+    <form class="link-row" id="linkForm" onsubmit="return false">
+      <input id="linkUrl" type="url" placeholder="…hoặc dán link Google Sheets / Google Drive công khai (ai có link đều xem được)" autocomplete="off" spellcheck="false">
+      <button class="primary" id="linkGo" type="submit">Nhập từ link</button>
+      <button id="linkReload" type="button" hidden title="Tải lại bản mới nhất từ link đã dùng">↻ Tải lại</button>
+    </form>
     <div class="log" id="log"></div>
   </div>
 
@@ -2154,6 +2162,51 @@ function render() {
 }
 
 /* ---------- actions ---------- */
+/* ---------- import from a public Google Sheets / Drive link ----------
+   Google Sheets are fetched as .xlsx through the export endpoint; files uploaded to Drive (.xlsx) through
+   drive.usercontent. Both allow cross-site downloads, so this works from any page (also GitHub Pages)
+   as long as the file is shared as "Anyone with the link". */
+const LINK_KEY = 'wir.livestream.link.v1';
+function driveTargets(url) {
+  const s = String(url || '').trim();
+  const id = (s.match(/\/d\/([\w-]{20,})/) || s.match(/[?&]id=([\w-]{20,})/) || s.match(/^([\w-]{25,})$/) || [])[1];
+  if (!id) return null;
+  const sheetsUrl = `https://docs.google.com/spreadsheets/d/${id}/export?format=xlsx`;
+  const driveUrl = `https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=t`;
+  // try the kind of link that was pasted first, then the other one
+  return { id, urls: /docs\.google\.com\/spreadsheets/.test(s) ? [sheetsUrl, driveUrl] : [driveUrl, sheetsUrl] };
+}
+async function importFromLink(url) {
+  const log = document.getElementById('log');
+  const t = driveTargets(url);
+  if (!t) { log.textContent = '✗ Link không hợp lệ: cần link Google Sheets (docs.google.com/spreadsheets/d/…) hoặc Google Drive (drive.google.com/file/d/…).'; return; }
+  log.textContent = '… đang tải từ Google';
+  for (const u of t.urls) {
+    try {
+      const res = await fetch(u);
+      if (!res.ok) continue;
+      const buf = await res.arrayBuffer();
+      const b = new Uint8Array(buf.slice(0, 4));
+      // an Excel file starts with "PK" (xlsx) or D0 CF (xls); anything else is a Google sign-in / error page
+      if (!(b[0] === 0x50 && b[1] === 0x4b) && !(b[0] === 0xd0 && b[1] === 0xcf)) continue;
+      log.textContent = importBuffer(buf, 'Google · ' + t.id.slice(0, 8) + '…');
+      try { localStorage.setItem(LINK_KEY, url.trim()); } catch (e) {}
+      paintLinkReload();
+      render();
+      return;
+    } catch (e) { /* network / CORS: try the next form */ }
+  }
+  log.textContent = '✗ Không tải được file từ link. Kiểm tra: chia sẻ “Bất kỳ ai có đường liên kết” (Người xem), và đây là Google Sheets hoặc file .xlsx trên Drive.';
+}
+function paintLinkReload() {
+  let last = ''; try { last = localStorage.getItem(LINK_KEY) || ''; } catch (e) {}
+  const btn = document.getElementById('linkReload');
+  btn.hidden = !last; btn.title = last ? 'Tải lại bản mới nhất từ: ' + last : '';
+  if (last && !document.getElementById('linkUrl').value) document.getElementById('linkUrl').value = last;
+}
+document.getElementById('linkForm').addEventListener('submit', () => importFromLink(document.getElementById('linkUrl').value));
+document.getElementById('linkReload').onclick = () => { let last = ''; try { last = localStorage.getItem(LINK_KEY) || ''; } catch (e) {} if (last) importFromLink(last); };
+paintLinkReload();
 const fileInput = document.getElementById('file');
 document.getElementById('btnImport').onclick = () => fileInput.click();
 fileInput.onchange = () => { importFiles([...fileInput.files]); fileInput.value = ''; };
