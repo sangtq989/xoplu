@@ -1,0 +1,2304 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Livestream Revenue Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --surface-2: #f3f2ef;
+  --text: #0b0b0b;
+  --text-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: rgba(11,11,11,0.10);
+  --accent: #2a78d6;
+  --good: #006300;
+  --bad: #d03b3b;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948;
+  --other: #b5b3ab;
+  --heat: 42, 120, 214;
+  --lv0: #ebedf0; --lv1: #9be9a8; --lv2: #40c463; --lv3: #30a14e; --lv4: #216e39;
+  --lvfg0: #52514e; --lvfg1: #0b2e13; --lvfg2: #0b2e13; --lvfg3: #ffffff; --lvfg4: #ffffff;
+  /* people: no greens or teals, so a person's block never blends into the green heat ramp */
+  --h1: #2563c9; --h2: #c4501a; --h3: #7a4fd6; --h4: #c2367f; --h5: #a87300; --h6: #0a86b8; --h7: #c93636; --h8: #8b5a2b;
+  --hfg: #ffffff; --hshadow: 0 1px 2px rgba(0,0,0,.45);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321;
+    --text: #ffffff; --text-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --accent: #3987e5; --good: #0ca30c; --bad: #e66767;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+    --other: #5e5d58;
+    --heat: 57, 135, 229;
+    --lv0: #22272e; --lv1: #0e4429; --lv2: #006d32; --lv3: #26a641; --lv4: #39d353;
+    --lvfg0: #9a9a93; --lvfg1: #d7f5dd; --lvfg2: #ffffff; --lvfg3: #04210d; --lvfg4: #04210d;
+    --h1: #4a8ef0; --h2: #f07a3d; --h3: #9b7cf0; --h4: #e0559b; --h5: #d9a21a; --h6: #2fb0dc; --h7: #e85a5a; --h8: #b07a45; --hfg: #111111; --hshadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321;
+  --text: #ffffff; --text-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --accent: #3987e5; --good: #0ca30c; --bad: #e66767;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+  --other: #5e5d58;
+  --heat: 57, 135, 229;
+  --lv0: #22272e; --lv1: #0e4429; --lv2: #006d32; --lv3: #26a641; --lv4: #39d353;
+  --lvfg0: #9a9a93; --lvfg1: #d7f5dd; --lvfg2: #ffffff; --lvfg3: #04210d; --lvfg4: #04210d;
+  --h1: #4a8ef0; --h2: #f07a3d; --h3: #9b7cf0; --h4: #e0559b; --h5: #d9a21a; --h6: #2fb0dc; --h7: #e85a5a; --h8: #b07a45; --hfg: #111111; --hshadow: none;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--page); color: var(--text);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+.wrap { max-width: 1280px; margin: 0 auto; padding: 20px 16px 60px; }
+header.top { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+header.top h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+header.top .sub { color: var(--text-2); font-size: 13px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+button, select, input {
+  font: inherit; color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px;
+}
+button { cursor: pointer; }
+button:hover { background: var(--surface-2); }
+button.primary { background: var(--accent); color: #fff; border-color: transparent; }
+button.primary:hover { filter: brightness(1.08); }
+button.danger { color: var(--bad); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+.card h2 { font-size: 15px; margin: 0 0 4px; }
+.card .hint { color: var(--muted); font-size: 12px; margin: 0 0 12px; }
+.drop {
+  border: 1.5px dashed var(--axis); border-radius: 12px; padding: 28px 16px; text-align: center;
+  color: var(--text-2); background: var(--surface); margin-bottom: 16px;
+}
+.drop.over { border-color: var(--accent); background: var(--surface-2); }
+.drop strong { color: var(--text); }
+.filters { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-bottom: 16px; }
+.fgroup { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.fgroup > .lbl { color: var(--muted); font-size: 12px; margin-right: 2px; }
+.chip {
+  border-radius: 999px; padding: 4px 10px; font-size: 13px; display: inline-flex; gap: 6px; align-items: center;
+  background: var(--surface); border: 1px solid var(--border); color: var(--text-2);
+}
+.chip.on { color: var(--text); border-color: var(--text-2); background: var(--surface-2); font-weight: 600; }
+.chip .dot { width: 8px; height: 8px; border-radius: 2px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; overflow-x: auto; }
+.tab { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 8px 12px; color: var(--text-2); white-space: nowrap; }
+.tab:hover { background: none; color: var(--text); }
+.tab.on { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+.kpi .k { color: var(--text-2); font-size: 12px; }
+.kpi .v { font-size: 22px; font-weight: 650; margin-top: 2px; letter-spacing: -0.01em; }
+.kpi .d { font-size: 12px; margin-top: 2px; color: var(--muted); }
+.up { color: var(--good); } .down { color: var(--bad); }
+.row-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; padding: 4px 10px; font-size: 13px; color: var(--text-2); }
+.seg button.on { background: var(--surface-2); color: var(--text); font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--text-2); margin: 4px 0 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; width: 100%; overflow: visible; }
+.chart .ax { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .lab { fill: var(--text-2); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .band { fill: transparent; cursor: pointer; }
+.chart .band:hover, .chart .band.sel { fill: var(--text); fill-opacity: 0.05; }
+.tip {
+  position: fixed; pointer-events: none; z-index: 20; min-width: 170px;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+  display: none;
+}
+.tip .t { color: var(--text-2); margin-bottom: 4px; }
+.tip .r { display: flex; align-items: center; gap: 8px; justify-content: space-between; font-variant-numeric: tabular-nums; }
+.tip .r b { font-weight: 650; }
+.tip .r em { font-style: normal; color: var(--text-2); display: inline-flex; align-items: center; gap: 6px; }
+.tip .r em i { width: 10px; height: 2px; display: inline-block; }
+.tip .tot { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
+.tip .sec { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 6px; }
+.tip .sec:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
+.tip .sec-h { display: flex; align-items: center; gap: 6px; font-weight: 650; margin-bottom: 2px; }
+.tip .sec-h i { width: 10px; height: 10px; border-radius: 2px; border: 1px solid var(--border); flex: none; }
+.tip .sec-n { color: var(--text-2); font-size: 11px; margin-bottom: 2px; }
+.tip .warn { color: var(--bad); }
+table.gh { border-collapse: separate; border-spacing: 3px; }
+table.gh td, table.gh th { border-bottom: 0; }
+table.gh td.heat-cell { border-radius: 4px; }
+table.gh tr.total td { border-top: 0; }
+.gh-box { overflow: hidden; display: grid; gap: 1px; align-content: start; }
+.gh-box.tt { width: 64px; height: 30px; }
+.gh-box.tt.full { width: 84px; height: 46px; gap: 2px; }
+.gh-box.sq { width: 40px; height: 30px; }
+table.gh.fixed { table-layout: fixed; }
+table.gh.fixed td { overflow: hidden; text-overflow: ellipsis; }
+table.gh.fixed tr.total td { font-size: 11px; }
+.gh-box.mx { width: 92px; height: 38px; align-content: center; text-align: right; }
+table.gh td.heat-cell { padding: 3px; }
+table.gh th.gh-col { padding: 4px 2px; font-size: 11px; text-align: center; }
+.chip.person { min-width: 84px; justify-content: center; }
+.gh-legend { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; color: var(--muted); }
+.gh-legend i { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
+[data-selgroup] { user-select: none; -webkit-user-select: none; }
+[data-selgroup] [data-sel] { cursor: cell; }
+.sel-cell { box-shadow: inset 0 0 0 2px var(--accent), inset 0 0 0 999px rgba(42, 120, 214, 0.18); }
+#selbar {
+  position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 25;
+  display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; max-width: calc(100% - 32px);
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 10px;
+  padding: 8px 12px; font-size: 13px; box-shadow: 0 8px 28px rgba(0,0,0,0.22); font-variant-numeric: tabular-nums;
+}
+#selbar[hidden] { display: none; }
+#selbar span { color: var(--text-2); white-space: nowrap; }
+#selbar b { color: var(--text); font-weight: 650; }
+#selbar button { padding: 2px 8px; font-size: 12px; }
+#selbox { position: fixed; z-index: 30; pointer-events: none; border: 1px solid var(--accent); background: rgba(42, 120, 214, 0.12); border-radius: 2px; }
+#selbox[hidden] { display: none; }
+[data-selgroup] { cursor: crosshair; }
+.heat-cell:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Timetable calendar: one column per date on a clock axis. Shift bands are the markers and carry the
+   revenue heat; lives are pills at their real start → end. The layer switch flips data-layer on the card,
+   so the CSS transitions animate the change. */
+.cal-wrap { overflow-x: auto; overflow-y: hidden; padding-bottom: 4px; }
+.cal { display: flex; align-items: flex-start; width: max-content; font-size: 12px; padding-bottom: 8px; } /* room for the last hour label, centred on the bottom line */
+.cal-axis { position: sticky; left: 0; z-index: 5; flex: none; width: 128px; background: var(--surface); box-shadow: 3px 0 0 var(--surface); }
+.cal-head { height: 34px; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: 4px; font-size: 11px; line-height: 1.25; color: var(--text-2); }
+.cal-col .cal-head { cursor: pointer; }
+.cal-body { position: relative; }
+.cal-col { flex: none; margin-left: 3px; }
+.cal-col > .cal-body { border-radius: 4px; background-color: var(--surface-2); background-image: linear-gradient(to bottom, var(--grid) 1px, transparent 1px); }
+.cal-tick { position: absolute; right: 6px; transform: translateY(-50%); font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.cal-mark { position: absolute; left: 0; right: 44px; border-left: 4px solid; padding: 2px 0 0 5px; overflow: hidden; line-height: 1.2; }
+.cal-mark b { display: block; font-size: 11px; font-weight: 600; color: var(--text); }
+.cal-mark small { display: block; font-size: 10px; color: var(--muted); white-space: nowrap; }
+.cal-ref { position: absolute; left: 0; right: 0; border-top: 1px dashed; opacity: .55; pointer-events: none; }
+.cal-live { position: absolute; z-index: 2; overflow: hidden; cursor: cell;
+  left: calc(100% * var(--lp) / 100); width: calc(100% * var(--wp) / 100 - 2px);
+  display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 1px;
+  padding: 3px 6px 3px 9px; border-radius: 5px; font-size: 11px; line-height: 1.25; text-align: left;
+  /* both (default): heat fill, the person as a stripe on the left */
+  background: var(--hb); color: var(--hf); box-shadow: inset 4px 0 0 var(--pc), 0 0 0 1px var(--surface);
+  transition: background-color .35s ease, color .35s ease, box-shadow .35s ease; transition-delay: calc(var(--i, 0) * 8ms); }
+.cal-live .nm { font-weight: 650; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-live .mv { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cal-live .tm { font-size: 10px; opacity: .85; font-variant-numeric: tabular-nums; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-live .pc { font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* short lives: one line, name then the metric */
+.cal-live.short { flex-direction: row; align-items: center; gap: 5px; padding-top: 0; padding-bottom: 0; white-space: nowrap; }
+.cal-live.short .tm, .cal-live.short .pc { display: none; }
+.cal-live.tiny { font-size: 10px; }
+.cal-live.off .nm { font-style: italic; }
+/* revenue: heat only · people: the person's color · both: heat + person stripe */
+.tt-hour[data-layer="rev"] .cal-live { box-shadow: inset 0 0 0 transparent, 0 0 0 1px var(--surface); padding-left: 6px; }
+.tt-hour[data-layer="host"] .cal-live { background-color: var(--pc); background-image: var(--pimg); color: var(--hfg); text-shadow: var(--hshadow);
+  box-shadow: 0 0 0 1px var(--surface); padding-left: 6px; }
+[data-layer="host"] .cal-live.off { color: var(--text); text-shadow: none; }
+/* "Theo ca" legacy grid: each cell is a shift on a date. Revenue = cell fill + total, people = blocks per
+   person sized by share, both = cell details with a thin person tag on top. Flipping data-layer animates it. */
+.ttc { position: relative; border-radius: 3px; padding-top: 7px; } /* top 7px: the person tag's own band */
+.ttc > .lay-rev, .ttc > .lay-host { position: absolute; inset: 0; pointer-events: none; }
+.ttc > .gh-box, .ttc > .lay-rev, .ttc > .lay-host {
+  transition: opacity .35s ease, transform .45s cubic-bezier(.2,.8,.2,1), clip-path .45s cubic-bezier(.2,.8,.2,1);
+  transition-delay: calc(var(--i, 0) * 9ms); }
+.lay-rev { display: flex; align-items: center; justify-content: center; font-weight: 650; font-size: 12px; font-variant-numeric: tabular-nums; }
+.lay-host { display: flex; gap: 2px; border-radius: 3px; overflow: hidden; clip-path: inset(0 0 0 0 round 3px); }
+.lay-host > div { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 2px;
+  color: var(--hfg); font-size: 11px; font-weight: 600; line-height: 1.2; text-align: center; text-shadow: var(--hshadow);
+  overflow: hidden; border-radius: 3px; transition: color .25s ease, text-shadow .25s ease; }
+.lay-host .nm { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lay-host .pc { font-size: 10px; font-weight: 700; opacity: .92; font-variant-numeric: tabular-nums; }
+.lay-host > .off { font-style: italic; color: var(--text); text-shadow: none; }
+.tt-shift[data-layer="rev"] .ttc > .gh-box { opacity: 0; }
+.tt-shift[data-layer="rev"] .ttc > .lay-host { opacity: 0; transform: translateY(-10px) scale(.94); }
+.tt-shift[data-layer="host"] .ttc > .gh-box, .tt-shift[data-layer="host"] .ttc > .lay-rev,
+.tt-shift[data-layer="both"] .ttc > .lay-rev { opacity: 0; }
+.tt-shift[data-layer="both"] .ttc > .lay-host { clip-path: inset(0 0 calc(100% - 5px) 0 round 3px); }
+.tt-shift[data-layer="both"] .lay-host > div { color: transparent; text-shadow: none; }
+/* selected pills (drag to add up) stay outlined in every view */
+[data-layer] .cal-live.sel-cell { box-shadow: inset 0 0 0 2px var(--accent), 0 0 0 2px var(--accent); }
+.tt-hostleg { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--text-2); margin: 2px 0 6px; transition: opacity .3s ease; }
+.tt-hostleg span { display: inline-flex; align-items: center; gap: 5px; }
+.tt-hostleg i { width: 14px; height: 10px; border-radius: 2px; display: inline-block; }
+[data-layer="rev"] .tt-hostleg { opacity: .35; }
+@media (prefers-reduced-motion: reduce) { .cal-live, .ttc > * { transition: none !important; } }
+.tblwrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 6px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--grid); }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--text-2); font-weight: 600; font-size: 12px; position: sticky; top: 0; background: var(--surface); }
+th.sort { cursor: pointer; user-select: none; }
+td { font-variant-numeric: tabular-nums; }
+tr.total td { font-weight: 650; border-top: 1px solid var(--axis); }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover td { background: var(--surface-2); }
+tr.sel td { background: var(--surface-2); }
+.pill { display: inline-flex; align-items: center; gap: 6px; }
+.pill i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+.pivot-ctl { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }
+.pivot-ctl label { display: inline-flex; gap: 6px; align-items: center; color: var(--text-2); font-size: 13px; }
+.empty { text-align: center; color: var(--muted); padding: 40px 16px; }
+.log { font-size: 12px; color: var(--text-2); white-space: pre-wrap; margin: 8px 0 0; }
+.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 30; padding: 16px; }
+.modal-bg.open { display: flex; }
+.modal { background: var(--surface); border-radius: 12px; border: 1px solid var(--border); padding: 18px; width: min(520px, 100%); max-height: 90vh; overflow: auto; }
+.modal h3 { margin: 0 0 6px; font-size: 16px; }
+.shift-row { display: grid; grid-template-columns: 1fr 110px 110px 36px; gap: 8px; margin-bottom: 8px; }
+.shift-row input { width: 100%; }
+@media (max-width: 600px) {
+  .kpi .v { font-size: 18px; }
+  .shift-row { grid-template-columns: 1fr 90px 90px 32px; }
+}
+</style>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Livestream Revenue Dashboard</h1>
+      <div class="sub" id="status">Chưa có dữ liệu</div>
+    </div>
+    <div class="actions">
+      <button class="primary" id="btnImport">Nhập file Excel</button>
+      <div class="seg" id="themeSeg" role="group" aria-label="Giao diện">
+        <button data-theme-opt="auto" title="Theo hệ thống">Tự động</button>
+        <button data-theme-opt="light">☀ Sáng</button>
+        <button data-theme-opt="dark">☾ Tối</button>
+      </div>
+      <div class="seg" id="hourSeg" role="group" aria-label="Cách hiện giờ live">
+        <button data-hour-opt="dec" title="Giờ dạng thập phân">1,5 h</button>
+        <button data-hour-opt="hm" title="Giờ và phút">1h30</button>
+        <button data-hour-opt="both" title="Cả hai">Cả hai</button>
+      </div>
+      <button id="btnShifts">Khung giờ ca</button>
+      <button id="btnExport">Xuất CSV</button>
+      <button id="btnBackup">Sao lưu / Khôi phục</button>
+      <button class="danger" id="btnClear">Xoá dữ liệu</button>
+      <input type="file" id="file" accept=".xlsx,.xlsm,.xls,.json" multiple hidden>
+    </div>
+  </header>
+
+  <div class="drop" id="drop">
+    <div><strong>Kéo thả file doanh số (vd Revenue2.xlsx) vào đây</strong> hoặc bấm “Nhập file Excel”.</div>
+    <div class="hint" style="margin-top:6px;font-size:12px;color:var(--muted)">
+      Mỗi sheet là một brand (tên sheet = brand), mỗi khối “Thời gian bắt đầu · Thời lượng · Engaged Viewers · Đơn hàng · Doanh số” là một nền tảng/tháng, tháng mới thêm sang phải.
+      Cột <b>“Nhân sự”</b> ngay bên trái mỗi khối ghi người live của từng phiên. Brand + nền tảng + tháng nào có trong file sẽ thay thế dữ liệu cũ của đúng phần đó; phần khác được giữ lại.
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+
+  <div id="app"></div>
+</div>
+
+<div class="tip" id="tip"></div>
+<div id="selbar" role="status" aria-live="polite" hidden></div>
+
+<div class="modal-bg" id="dataModal">
+  <div class="modal" style="width:min(680px,100%)">
+    <h3 id="dataTitle">Xuất dữ liệu</h3>
+    <p class="hint" id="dataHint" style="color:var(--muted);font-size:12px;margin:0 0 10px"></p>
+    <textarea id="dataText" spellcheck="false" style="width:100%;height:260px;font:12px/1.4 ui-monospace,Menlo,monospace;color:var(--text);background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:8px;resize:vertical"></textarea>
+    <div class="log" id="dataLog"></div>
+    <div style="display:flex;gap:8px;justify-content:space-between;margin-top:12px;flex-wrap:wrap">
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="primary" id="dataCopy">Sao chép</button>
+        <button id="dataDownload">Tải file</button>
+        <button id="dataRestore">Khôi phục từ nội dung đã dán</button>
+      </div>
+      <button id="dataClose">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="shiftModal">
+  <div class="modal">
+    <h3>Khung giờ ca livestream</h3>
+    <p class="hint" style="color:var(--muted);font-size:12px;margin:0 0 12px">
+      Ca được tính hoàn toàn từ khung giờ ở đây (không đọc cột ca trong file). Phiên live được xếp vào mọi ca mà nó chạy qua, từ giờ bắt đầu đến hết thời lượng. Khung giờ có thể vắt qua nửa đêm (vd 18:00 → 01:00); giờ nằm ngoài mọi ca là “Ngoài ca”.
+    </p>
+    <div id="shiftRows"></div>
+    <div style="border-top:1px solid var(--border);margin-top:12px;padding-top:12px;display:grid;gap:8px">
+      <div style="font-weight:600;font-size:13px">Phiên live kéo dài qua nhiều ca</div>
+      <label style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--text-2)">Chia doanh số, đơn, viewers, giờ live
+        <select id="splitMode">
+          <option value="equal">chia đều cho các ca (2 ca → mỗi ca 50%)</option>
+          <option value="time">theo số phút trong mỗi ca</option>
+        </select>
+      </label>
+      <label style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--text-2)">Bỏ qua ca nếu phiên chỉ lấn sang dưới
+        <input id="splitMin" type="number" min="0" max="180" step="1" style="width:80px"> phút
+      </label>
+      <label style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px;color:var(--text-2)">Đếm số phiên
+        <select id="splitCount">
+          <option value="whole">số nguyên: phiên tính 1 ở mỗi ca / người mà nó chạy qua</option>
+          <option value="split">chia như doanh số (2 ca → mỗi ca 0,5 phiên)</option>
+        </select>
+      </label>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:space-between;margin-top:12px;flex-wrap:wrap">
+      <div style="display:flex;gap:8px">
+        <button id="shiftAdd">+ Thêm ca</button>
+        <button id="shiftReset">Mặc định</button>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button id="shiftCancel">Huỷ</button>
+        <button class="primary" id="shiftSave">Lưu</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- constants ---------- */
+const STORE_KEY = 'wir.livestream.sessions.v1';
+const SHIFT_KEY = 'wir.livestream.shifts.v1';
+const SPLIT_KEY = 'wir.livestream.split.v1';
+const UI_KEY = 'wir.livestream.ui.v1';
+const OUT_SHIFT = 'Ngoài ca';
+// Mirrors the "Ca livestream" formula in the Livestream sheet
+const DEFAULT_SHIFTS = [
+  { name: 'Ca 1', from: '09:00', to: '12:00' },
+  { name: 'Ca 2', from: '12:00', to: '15:00' },
+  { name: 'Ca 3', from: '15:00', to: '18:00' },
+  { name: 'Ca 4', from: '18:00', to: '01:00' },
+];
+const PLATFORMS = [
+  { key: 'tiktok', label: 'TikTok', color: 'var(--s1)' },
+  { key: 'shopee', label: 'Shopee', color: 'var(--s2)' },
+  { key: 'drw', label: 'DRW', color: 'var(--s7)' },
+];
+function platLabel(k) { return (PLATFORMS.find(p => p.key === k) || {}).label || k; }
+// Brand = the revenue sheet's name, compared in upper case
+function brandKey(s) { return String(s == null ? '' : s).normalize('NFC').replace(/\s+/g, ' ').trim().toUpperCase(); }
+function brandLabel(k) { return k || 'Chưa rõ brand'; }
+const SLOTS = ['var(--s1)','var(--s2)','var(--s3)','var(--s4)','var(--s5)','var(--s6)','var(--s7)','var(--s8)'];
+const WEEKDAYS = ['CN','T2','T3','T4','T5','T6','T7'];
+
+/* ---------- storage ---------- */
+function load(key, fallback) {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch (e) { return fallback; }
+}
+function save(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch (e) { return false; }
+}
+
+const S = {
+  sessions: load(STORE_KEY, []),
+  shifts: load(SHIFT_KEY, DEFAULT_SHIFTS),
+  // How a live that runs across shifts is divided: 'equal' = same share per shift, 'time' = by minutes in each shift
+  split: Object.assign({ mode: 'equal', minOverlap: 0, count: 'whole' }, load(SPLIT_KEY, {})),
+  ver: 0,
+  ui: Object.assign({
+    tab: 'history', hourFmt: 'both', brands: [], platforms: [], shifts: [], monthFrom: '', monthTo: '',
+    stackBy: 'platform', selMonth: '', historyMetric: 'revenue',
+    pivot: { rows: 'month', cols: 'platform', facet: '', metric: 'revenue' },
+    sort: { key: 'ts', dir: -1 }, sessMonth: '',
+    hosts: { brand: '', metric: 'revenue', cols: 'shift', month: '', simple: false, mergePlat: false, people: [], layer: 'both', from: '', to: '', single: false, ttMode: 'hour' },
+    cmp: { view: 'pair', cumulative: false, mode: 'week', weekType: 'iso', week: '', from: '', to: '', sameLen: true, metric: 'revenue', baseWeek: '', baseOff: 1, bfrom: '', bto: '' },
+  }, load(UI_KEY, {})),
+};
+function saveUI() { save(UI_KEY, S.ui); }
+
+/* ---------- formatting ---------- */
+const nf0 = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
+const nf1 = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 });
+const nf2 = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 });
+function money(v) { return v == null || !isFinite(v) ? '–' : nf0.format(Math.round(v)) + ' ₫'; }
+function compact(v) {
+  if (v == null || !isFinite(v)) return '–';
+  const a = Math.abs(v);
+  if (a >= 1e9) return nf2.format(v / 1e9) + ' tỷ';
+  if (a >= 1e6) return nf1.format(v / 1e6) + ' tr';
+  if (a >= 1e3) return nf1.format(v / 1e3) + 'k';
+  return nf1.format(v);
+}
+function pct(v) { return v == null || !isFinite(v) ? '–' : (v > 0 ? '+' : '') + nf1.format(v * 100) + '%'; }
+/* Hours as decimal ("1,5 h"), hours-minutes ("1h30") or both ("1,5 h · 1h30"), per the "Giờ" switch.
+   short drops the " h" unit (tables, cells); single gives one form only (chart axes). */
+function hoursTxt(hours, short, single) {
+  if (hours == null || !isFinite(hours)) return '–';
+  const mode = S.ui.hourFmt || 'both';
+  const dec = nf1.format(hours) + (short ? '' : ' h');
+  const t = Math.round(Math.abs(hours) * 60), hm = (hours < 0 ? '-' : '') + Math.floor(t / 60) + 'h' + (t % 60 ? pad(t % 60) : '');
+  return mode === 'dec' ? dec : mode === 'hm' ? hm : single ? dec : `${dec} · ${hm}`;
+}
+function hrs(min) { return hoursTxt(min / 60); }
+function durFmt(min) { return hoursTxt(min / 60, true); }
+function monthLabel(ym) { const [y, m] = ym.split('-'); return 'T' + (+m) + '/' + y; }
+const pad = n => String(n).padStart(2, '0');
+
+/* ---------- shifts ---------- */
+function toMin(hhmm) { const [h, m] = String(hhmm).split(':').map(Number); return (h || 0) * 60 + (m || 0); }
+// When ranges overlap, the shift that started most recently wins, so adding
+// "Ca 5 21:00–01:00" takes 21:00 onward away from "Ca 4 18:00–01:00".
+function shiftOf(H, M, shifts = S.shifts) {
+  const t = H * 60 + M;
+  let best = OUT_SHIFT, bestElapsed = Infinity;
+  for (const s of shifts) {
+    const a = toMin(s.from), b = toMin(s.to);
+    if (a === b || !s.name.trim()) continue;
+    if (!(a < b ? (t >= a && t < b) : (t >= a || t < b))) continue;
+    const elapsed = (t - a + 1440) % 1440;
+    if (elapsed < bestElapsed) { best = s.name.trim(); bestElapsed = elapsed; }
+  }
+  return best;
+}
+// Operating day starts at 06:00, so a shift starting after midnight sorts last
+function sortShifts(list) { return list.slice().sort((x, y) => (toMin(x.from) - 360 + 1440) % 1440 - (toMin(y.from) - 360 + 1440) % 1440); }
+function shiftOrder() { return [...new Set(S.shifts.map(s => s.name))].concat(OUT_SHIFT); }
+// "09:00–12:00" for a shift name (several ranges joined), '' for the out-of-shift bucket
+function shiftHours(name) {
+  return S.shifts.filter(s => s.name === name).map(s => `${s.from}–${s.to}`).join(', ');
+}
+function shiftColor(name) {
+  if (name === OUT_SHIFT) return 'var(--other)';
+  const i = S.shifts.findIndex(s => s.name === name);
+  return SLOTS[i % SLOTS.length];
+}
+
+/* ---------- Excel parsing ---------- */
+const DATE_RE_YMD = /(\d{4})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*\/?\s*(\d{1,2}):(\d{2})/;
+const DATE_RE_DMY = /(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{4})\s*,?\s*(\d{1,2}):(\d{2})/;
+
+function norm(s) { return String(s == null ? '' : s).toLowerCase().normalize('NFC').trim(); }
+
+function parseStart(cell) {
+  if (!cell) return null;
+  if (cell.t === 'n' && cell.v > 20000 && cell.v < 80000) {
+    const d = XLSX.SSF.parse_date_code(cell.v);
+    if (!d) return null;
+    return { y: d.y, m: d.m, d: d.d, H: d.H, M: d.M };
+  }
+  if (cell.t === 'd' && cell.v instanceof Date) {
+    const v = cell.v; return { y: v.getFullYear(), m: v.getMonth() + 1, d: v.getDate(), H: v.getHours(), M: v.getMinutes() };
+  }
+  if (cell.t === 's') {
+    const s = String(cell.v);
+    let m = s.match(DATE_RE_YMD);
+    if (m) return { y: +m[1], m: +m[2], d: +m[3], H: +m[4], M: +m[5] };
+    m = s.match(DATE_RE_DMY);
+    if (m) return { y: +m[3], m: +m[2], d: +m[1], H: +m[4], M: +m[5] };
+  }
+  return null;
+}
+function parseDur(cell) { // → minutes
+  if (!cell) return 0;
+  if (cell.t === 'n') return cell.v * 1440;
+  if (cell.t === 'd' && cell.v instanceof Date) return cell.v.getHours() * 60 + cell.v.getMinutes() + cell.v.getSeconds() / 60;
+  const s = norm(cell.v);
+  let m = s.match(/^(\d+):(\d{1,2})(?::(\d{1,2}))?$/);
+  if (m) return (+m[1]) * 60 + (+m[2]) + (+(m[3] || 0)) / 60;
+  const h = s.match(/(\d+(?:[.,]\d+)?)\s*h/), mi = s.match(/(\d+)\s*m/), se = s.match(/(\d+)\s*s(?!\w)/);
+  if (h || mi) return (h ? parseFloat(h[1].replace(',', '.')) * 60 : 0) + (mi ? +mi[1] : 0) + (se ? +se[1] / 60 : 0);
+  return 0;
+}
+function parseNum(cell) {
+  if (!cell || cell.v == null) return 0;
+  if (cell.t === 'n') return cell.v;
+  const s = String(cell.v).replace(/[^\d,.\-]/g, '');
+  if (!s) return 0;
+  // Vietnamese exports use "." or "," as thousands separators
+  const n = Number(s.replace(/[.,](?=\d{3}(\D|$))/g, '').replace(',', '.'));
+  return isFinite(n) ? n : 0;
+}
+function detectPlatform(ws, hr, c, startCols) {
+  for (let r = hr - 1; r >= Math.max(0, hr - 3); r--) {
+    for (let cc = c - 1; cc <= c + 4; cc++) {
+      if (cc < 0) continue;
+      const cell = ws[XLSX.utils.encode_cell({ r, c: cc })];
+      const t = norm(cell && cell.v);
+      if (t.includes('tiktok')) return 'tiktok';
+      if (t.includes('shopee')) return 'shopee';
+      if (/\bdrw\b/.test(t)) return 'drw';
+    }
+  }
+  const hdr = norm((ws[XLSX.utils.encode_cell({ r: hr, c: c - 1 })] || {}).v);
+  if (hdr.includes('tiktok')) return 'tiktok';
+  if (hdr.includes('shopee')) return 'shopee';
+  return null;
+}
+function parseWorkbook(wb) {
+  const out = [], notes = [];
+  for (const name of wb.SheetNames) {
+    const ws = wb.Sheets[name];
+    if (!ws['!ref']) continue;
+    // each revenue sheet is one brand, named after it; the old single "Livestream" sheet has no brand
+    const brand = /^\s*livestream\s*$/i.test(name) ? '' : brandKey(name);
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    for (let r = range.s.r; r <= Math.min(range.e.r, range.s.r + 40); r++) {
+      const starts = [];
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const cell = ws[XLSX.utils.encode_cell({ r, c })];
+        if (cell && norm(cell.v) === 'thời gian bắt đầu') starts.push(c);
+      }
+      if (!starts.length) continue;
+      starts.forEach((c, i) => {
+        const end = i + 1 < starts.length ? starts[i + 1] : c + 8;
+        const col = { dur: -1, view: -1, ord: -1, rev: -1 };
+        for (let cc = c + 1; cc < end; cc++) {
+          const h = norm((ws[XLSX.utils.encode_cell({ r, c: cc })] || {}).v);
+          if (!h) continue;
+          if (col.dur < 0 && h.startsWith('thời lượng')) col.dur = cc;
+          else if (col.view < 0 && (h.includes('viewer') || h.includes('người xem'))) col.view = cc;
+          else if (col.ord < 0 && h.startsWith('đơn hàng')) col.ord = cc;
+          else if (col.rev < 0 && h.startsWith('doanh số')) col.rev = cc;
+        }
+        if (col.rev < 0) return;
+        // the person who ran each live sits in a "Nhân sự" column just left of the block
+        const staffCol = c > 0 && norm((ws[XLSX.utils.encode_cell({ r, c: c - 1 })] || {}).v) === 'nhân sự' ? c - 1 : -1;
+        let platform = detectPlatform(ws, r, c, starts);
+        const rows = [];
+        let sawString = 0, sawDate = 0;
+        for (let rr = r + 1; rr <= range.e.r; rr++) {
+          const sc = ws[XLSX.utils.encode_cell({ r: rr, c })];
+          const st = parseStart(sc);
+          if (!st) continue;
+          if (sc.t === 's') sawString++; else sawDate++;
+          const g = cc => cc < 0 ? null : ws[XLSX.utils.encode_cell({ r: rr, c: cc })];
+          rows.push({
+            ...st,
+            dur: Math.round(parseDur(g(col.dur)) * 10) / 10,
+            viewers: parseNum(g(col.view)),
+            orders: parseNum(g(col.ord)),
+            revenue: parseNum(g(col.rev)),
+            staff: staffCol < 0 ? '' : hostKey((g(staffCol) || {}).v),
+          });
+        }
+        // TikTok exports times as text ("2026/07/30/ 14:50"), Shopee as real dates
+        if (!platform) platform = sawString > sawDate ? 'tiktok' : 'shopee';
+        rows.forEach(x => {
+          x.p = platform;
+          x.brand = brand;
+          x.ts = `${x.y}-${pad(x.m)}-${pad(x.d)}T${pad(x.H)}:${pad(x.M)}`;
+          out.push(x);
+        });
+        const tagged = rows.filter(x => x.staff).length;
+        if (rows.length) notes.push(`${name}${brand ? '' : ' (chưa rõ brand)'} · ${platLabel(platform)} (cột ${XLSX.utils.encode_col(c)}): ${rows.length} phiên` +
+          (staffCol < 0 ? ' · chưa có cột Nhân sự' : tagged < rows.length ? ` · ${rows.length - tagged} phiên chưa gắn tên` : ''));
+      });
+      break; // header row found for this sheet
+    }
+  }
+  return { sessions: out, notes };
+}
+
+function mergeSessions(incoming) {
+  // Each (brand, platform, month) present in the import replaces what was stored for it
+  const sk = s => (s.brand || '') + '|' + s.p + '|' + s.ts.slice(0, 7);
+  const scope = new Set(incoming.map(sk));
+  // sessions from the old single "Livestream" sheet carry no brand: a branded import of the same platform + month supersedes them
+  const branded = new Set(incoming.filter(s => s.brand).map(s => s.p + '|' + s.ts.slice(0, 7)));
+  const kept = S.sessions.filter(s => !scope.has(sk(s)) && !(!s.brand && branded.has(s.p + '|' + s.ts.slice(0, 7))));
+  const seen = new Set();
+  const fresh = [];
+  for (const s of incoming) {
+    const k = (s.brand || '') + '|' + s.p + '|' + s.ts + '|' + s.dur + '|' + s.revenue;
+    if (seen.has(k)) continue;
+    seen.add(k); fresh.push(s);
+  }
+  S.sessions = kept.concat(fresh).sort((a, b) => a.ts < b.ts ? -1 : 1);
+  S.ver++;
+  save(STORE_KEY, S.sessions);
+  return { scope: [...scope].sort(), added: fresh.length };
+}
+
+async function importFiles(files) {
+  const logs = [];
+  for (const f of files) {
+    try {
+      const buf = await f.arrayBuffer();
+      if (/\.json$/i.test(f.name)) {
+        const data = JSON.parse(new TextDecoder().decode(buf));
+        const arr = Array.isArray(data) ? data : data.sessions;
+        if (!Array.isArray(arr)) throw new Error('JSON không đúng định dạng');
+        const r = mergeSessions(arr.filter(s => s && s.ts && s.p));
+        logs.push(`✓ ${f.name}: khôi phục ${r.added} phiên`);
+        continue;
+      }
+      logs.push(importBuffer(buf, f.name));
+    } catch (e) {
+      logs.push(`✗ ${f.name}: ${e.message}`);
+    }
+  }
+  document.getElementById('log').textContent = logs.join('\n');
+  render();
+}
+function importBuffer(buf, name) {
+  const wb = XLSX.read(buf, { type: 'array', cellStyles: true });
+  const { sessions, notes } = parseWorkbook(wb);
+  const out = [];
+  if (sessions.length) {
+    const r = mergeSessions(sessions);
+    out.push(`✓ ${name}: ${r.added} phiên · cập nhật ${r.scope.map(k => { const [b, p, ym] = k.split('|'); return `${brandLabel(b)} ${platLabel(p)} ${monthLabel(ym)}`; }).join(', ')}\n   ${notes.join('\n   ')}`);
+  }
+  return out.length ? out.join('\n') : `✗ ${name}: không tìm thấy dữ liệu livestream (tiêu đề “Thời gian bắt đầu”)`;
+}
+
+// Names are taken as written, spacing tidied; staffKey also ignores case when grouping people.
+function staffKey(name) { return hostKey(name).toLocaleLowerCase('vi'); }
+function hostKey(name) { return String(name == null ? '' : name).normalize('NFC').replace(/\s+/g, ' ').trim(); }
+let brandCache = { key: '', brand: '' };
+function revBrands() { return [...new Set(S.sessions.map(s => s.brand).filter(Boolean))].sort(); }
+function activeBrand() {
+  const brands = revBrands();
+  if (S.ui.hosts.brand && brands.includes(S.ui.hosts.brand)) return S.ui.hosts.brand;
+  // "Tự động" follows the Brand chips at the top when one is picked
+  const chosen = (S.ui.brands || []).find(b => brands.includes(b));
+  if (chosen) return chosen;
+  const key = S.ver + '|' + S.sessions.length;
+  if (brandCache.key !== key) {
+    // default: the brand with the most revenue tagged to people, else the most revenue
+    const tagged = new Map(), all = new Map();
+    for (const s of S.sessions) if (s.brand) {
+      all.set(s.brand, (all.get(s.brand) || 0) + (s.revenue || 0));
+      if (s.staff) tagged.set(s.brand, (tagged.get(s.brand) || 0) + (s.revenue || 0));
+    }
+    const top = mp => [...mp].sort((x, y) => y[1] - x[1])[0]?.[0];
+    brandCache = { key, brand: top(tagged) || top(all) || '' };
+  }
+  return brandCache.brand;
+}
+const HOST_NONE = '~none';
+
+/* ---------- derived data ---------- */
+function isoWeekday(s) { return new Date(s.y, s.m - 1, s.d).getDay(); }
+const DIMS = {
+  month:    { label: 'Tháng', key: s => s.ts.slice(0, 7), name: k => monthLabel(k) },
+  brand:    { label: 'Brand', key: s => s.brand || '', name: brandLabel },
+  platform: { label: 'Nền tảng', key: s => s.p, name: k => (PLATFORMS.find(p => p.key === k) || {}).label || k, order: () => PLATFORMS.map(p => p.key) },
+  shift:    { label: 'Ca', key: s => s.shift, name: k => k, order: shiftOrder },
+  week:     { label: 'Tuần trong tháng', key: s => 'W' + Math.min(4, Math.ceil(s.d / 7)), name: k => 'Tuần ' + k.slice(1) },
+  date:     { label: 'Ngày', key: s => s.ts.slice(0, 10), name: k => k.slice(8, 10) + '/' + k.slice(5, 7) },
+  weekday:  { label: 'Thứ', key: s => String(isoWeekday(s)), name: k => WEEKDAYS[+k], order: () => ['1','2','3','4','5','6','0'] },
+  hour:     { label: 'Giờ bắt đầu', key: s => pad(s.H), name: k => k + 'h' },
+  dom:      { label: 'Ngày trong tháng', key: s => pad(s.d), name: k => String(+k) },
+  host:     { label: 'Người live', key: s => s.host, name: k => hostName(k), order: () => [...HOSTS.keys()].sort((a, b) => hostName(a).localeCompare(hostName(b), 'vi')).concat(HOST_NONE) },
+};
+const METRICS = {
+  revenue:  { label: 'Doanh số', fmt: compact, full: money, add: true },
+  orders:   { label: 'Đơn hàng', fmt: v => nf0.format(v), full: v => nf0.format(v), add: true },
+  sessions: { label: 'Số phiên live', fmt: v => nf1.format(v), full: v => nf1.format(v), add: true },
+  // hours: several platforms in the same shift count only the largest platform (see agg)
+  hours:    { label: 'Giờ live', fmt: Object.assign(v => hoursTxt(v, true), { axis: v => hoursTxt(v, true, true) }), full: v => hoursTxt(v), add: true },
+  viewers:  { label: 'Engaged viewers', fmt: compact, full: v => nf0.format(v), add: true },
+  revph:    { label: 'Doanh số / giờ', fmt: compact, full: money, add: false },
+  aov:      { label: 'Giá trị đơn TB', fmt: compact, full: money, add: false },
+  conv:     { label: 'Tỉ lệ chốt đơn (đơn/viewer)', fmt: v => nf2.format(v * 100) + '%', full: v => nf2.format(v * 100) + '%', add: false },
+};
+function agg(list) {
+  const a = { revenue: 0, orders: 0, sessions: 0, minutes: 0, viewers: 0 };
+  const whole = S.split.count !== 'split', ids = new Set();
+  const onAir = [];
+  for (const s of list) {
+    if (whole && s.id != null) ids.add(s.id); else a.sessions += s.w == null ? 1 : s.w;
+    a.revenue += s.revenue; a.orders += s.orders; a.viewers += s.viewers;
+    if (s.who != null) onAir.push(s); else a.minutes += s.dur;
+  }
+  // Hours: each piece counts the real clock minutes it spent in its shift. When one person lives on
+  // several platforms in the same shift (same day), only the platform with the most minutes counts.
+  // Revenue, orders and viewers still add up across platforms and follow the shift split setting.
+  for (const items of groupBy(onAir, s => s.who + '|' + s.ts.slice(0, 10) + '|' + s.shift).values()) {
+    const perPlat = new Map();
+    for (const s of items) perPlat.set(s.p, (perPlat.get(s.p) || 0) + s.wins.reduce((t, [x, y]) => t + (y - x), 0));
+    a.minutes += Math.max(...perPlat.values());
+  }
+  a.sessions += ids.size;
+  a.hours = a.minutes / 60;
+  a.revph = a.hours ? a.revenue / a.hours : null;
+  a.aov = a.orders ? a.revenue / a.orders : null;
+  a.conv = a.viewers ? a.orders / a.viewers : null;
+  return a;
+}
+function groupBy(list, fn) {
+  const m = new Map();
+  for (const s of list) { const k = fn(s); if (!m.has(k)) m.set(k, []); m.get(k).push(s); }
+  return m;
+}
+// Shifts always list every shift defined in "Khung giờ ca" (within the shift filter), even with no data;
+// "Ngoài ca" only when something falls outside all shifts.
+function shiftKeys(present = []) {
+  const f = S.ui.shifts;
+  return shiftOrder().filter(sh => sh === OUT_SHIFT ? present.includes(sh) : (!f.length || f.includes(sh)));
+}
+function sortKeys(dim, keys) {
+  if (dim === 'shift') return shiftKeys(keys);
+  const d = DIMS[dim];
+  if (d.order) { const o = d.order(); return keys.slice().sort((a, b) => (o.indexOf(a) + 1 || 999) - (o.indexOf(b) + 1 || 999) || (a < b ? -1 : 1)); }
+  return keys.slice().sort();
+}
+function seriesColor(dim, key, idx) {
+  if (dim === 'platform') return (PLATFORMS.find(p => p.key === key) || {}).color || 'var(--other)';
+  if (dim === 'shift') return shiftColor(key);
+  return idx < SLOTS.length ? SLOTS[idx] : 'var(--other)';
+}
+
+/* A session covers [start, start + duration). Each minute is assigned to a shift with
+   the same rule as the start time; every shift it touches gets a share of all metrics. */
+function splitSession(s, shifts = S.shifts, split = S.split) {
+  const start = s.H * 60 + s.M, len = Math.max(1, Math.round(s.dur));
+  const mins = new Map(), span = new Map();
+  for (let t = start; t < start + len; t++) {
+    const k = shiftOf(Math.floor((t % 1440) / 60), t % 60, shifts);
+    mins.set(k, (mins.get(k) || 0) + 1);
+    if (!span.has(k)) span.set(k, [t, t + 1]); else span.get(k)[1] = t + 1;
+  }
+  const min = Math.max(0, +split.minOverlap || 0);
+  let touched = [...mins].filter(([k, m]) => m >= min);
+  if (touched.some(([k]) => k !== OUT_SHIFT)) touched = touched.filter(([k]) => k !== OUT_SHIFT);
+  if (!touched.length) { const k = shiftOf(s.H, s.M, shifts); touched = [[k, len]]; span.set(k, [start, start + len]); }
+  const total = touched.reduce((a, [, m]) => a + m, 0);
+  return touched.map(([shift, m]) => ({ shift, w: split.mode === 'time' ? m / total : 1 / touched.length, span: span.get(shift) || [start, start + len] }));
+}
+function shiftLabel(parts) {
+  return parts.length === 1 ? parts[0].shift : parts.map(x => `${x.shift} (${nf0.format(x.w * 100)}%)`).join(' + ');
+}
+let pieceCache = { key: '', list: [] };
+let HOSTS = new Map();
+function hostName(k) { return k === HOST_NONE ? 'Chưa gắn tên' : (HOSTS.get(k) || {}).name || k; }
+/* Each live's person is the "Nhân sự" written on it in the revenue sheet; untagged lives go to HOST_NONE.
+   A live running across shifts is split between them as set in "Khung giờ ca". */
+/* One live cut into shift pieces under a split setting: metrics follow the split weight w, while
+   each piece also keeps its real on-air clock windows (for hours). */
+function sessionPieces(s, id, split) {
+  const host = s.staff ? staffKey(s.staff) : HOST_NONE;
+  const day0 = Date.UTC(s.y, s.m - 1, s.d) / 60000; // for on-air time: where each piece sits in absolute minutes
+  const parts = splitSession(s, S.shifts, split);
+  const label = shiftLabel(parts);
+  // on-air windows on the clock: each piece gets its own minutes in its shift, plus any minutes the
+  // split leaves out (e.g. before Ca 1 or in the "Ngoài ca" gap), given to the neighbouring piece
+  const st = s.H * 60 + s.M, rl = Math.max(1, Math.round(s.dur)), k = s.dur / rl;
+  const clock = t => day0 + st + (t - st) * k;
+  const order = parts.map((x, i) => i).sort((i, j) => parts[i].span[0] - parts[j].span[0]);
+  const wins = parts.map(x => [[clock(x.span[0]), clock(x.span[1])]]);
+  let prev = st;
+  order.forEach((i, n) => {
+    const [a, b] = parts[i].span;
+    if (a > prev) wins[n ? order[n - 1] : i].push([clock(prev), clock(a)]);
+    prev = Math.max(prev, b);
+  });
+  if (prev < st + rl && order.length) wins[order[order.length - 1]].push([clock(prev), clock(st + rl)]);
+  return parts.map(({ shift, w }, pi) => Object.assign({}, s, {
+    id, shift, w, host, shiftLabel: label, hostLabel: hostName(host), brand: s.brand || '',
+    revenue: s.revenue * w, orders: s.orders * w, viewers: s.viewers * w, dur: s.dur * w,
+    who: (s.brand || '') + '|' + host, wins: wins[pi],
+  }));
+}
+function enriched() {
+  const key = S.ver + '|' + S.sessions.length + '|' + JSON.stringify(S.shifts) + '|' + JSON.stringify(S.split);
+  if (pieceCache.key === key) return pieceCache.list;
+  // names match ignoring case ("EDU" = "Edu"); the spelling used most often is the one shown
+  const spellings = new Map();
+  for (const s of S.sessions) if (s.staff) {
+    const k = staffKey(s.staff);
+    if (!spellings.has(k)) spellings.set(k, new Map());
+    spellings.get(k).set(s.staff, (spellings.get(k).get(s.staff) || 0) + 1);
+  }
+  HOSTS = new Map([...spellings].map(([k, m]) => [k, { name: [...m].sort((a, b) => b[1] - a[1])[0][0] }]));
+  const list = [];
+  S.sessions.forEach((s, id) => list.push(...sessionPieces(s, id, S.split)));
+  pieceCache = { key, list };
+  return list;
+}
+function allMonths(list) { return [...new Set(list.map(s => s.ts.slice(0, 7)))].sort(); }
+function filteredNoMonth() {
+  const u = S.ui;
+  return enriched().filter(s =>
+    (!u.brands.length || u.brands.includes(s.brand)) &&
+    (!u.platforms.length || u.platforms.includes(s.p)) &&
+    (!u.shifts.length || u.shifts.includes(s.shift)));
+}
+function filtered(allBrands, anyMonth) {
+  const u = S.ui;
+  return enriched().filter(s =>
+    (allBrands || !u.brands.length || u.brands.includes(s.brand)) &&
+    (!u.platforms.length || u.platforms.includes(s.p)) &&
+    (!u.shifts.length || u.shifts.includes(s.shift)) &&
+    (anyMonth || !u.monthFrom || s.ts.slice(0, 7) >= u.monthFrom) &&
+    (anyMonth || !u.monthTo || s.ts.slice(0, 7) <= u.monthTo));
+}
+
+/* ---------- DOM helpers ---------- */
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k === 'style') el.style.cssText = v;
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  return el;
+}
+const SVGNS = 'http://www.w3.org/2000/svg';
+function sv(tag, attrs, text) {
+  const el = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
+  if (text != null) el.textContent = text;
+  return el;
+}
+function swatch(color) { return h('i', { style: 'background:' + color }); }
+
+/* ---------- tooltip ---------- */
+const tip = document.getElementById('tip');
+function showTip(ev, title, rows, total) {
+  tip.replaceChildren(h('div', { class: 't' }, title));
+  for (const r of rows) tip.append(h('div', { class: 'r' }, h('em', null, h('i', { style: 'background:' + r.color }), r.label), h('b', null, r.value)));
+  if (total) tip.append(h('div', { class: 'r tot' }, h('em', null, total.label), h('b', null, total.value)));
+  tip.style.display = 'block';
+  moveTip(ev);
+}
+/* Detailed tooltip: sections of label/value rows, e.g. one per host in a timetable block */
+function showTipSections(ev, title, sections) {
+  tip.replaceChildren(h('div', { class: 't' }, title));
+  for (const sec of sections) {
+    const box = h('div', { class: 'sec' });
+    if (sec.head) box.append(h('div', { class: 'sec-h' }, sec.color ? h('i', { style: 'background:' + sec.color }) : null, sec.head));
+    if (sec.note) box.append(h('div', { class: 'sec-n' + (sec.warn ? ' warn' : '') }, sec.note));
+    for (const [l, v] of sec.rows || []) box.append(h('div', { class: 'r' }, h('em', null, l), h('b', null, v)));
+    tip.append(box);
+  }
+  tip.style.display = 'block';
+  moveTip(ev);
+}
+function bindTip(el, build) {
+  const show = ev => { if (SEL.dragging) return; const t = build(); showTipSections(ev, t.title, t.sections); };
+  el.addEventListener('pointerenter', show);
+  el.addEventListener('pointermove', moveTip);
+  el.addEventListener('pointerleave', hideTip);
+  el.addEventListener('focus', () => { const r = el.getBoundingClientRect(); show({ clientX: r.right, clientY: r.bottom }); });
+  el.addEventListener('blur', hideTip);
+  el.tabIndex = 0;
+  return el;
+}
+function metricRows(x, highlight) {
+  const rows = [
+    ['revenue', 'Doanh số', money(x.revenue)], ['orders', 'Đơn hàng', nf0.format(x.orders)], ['sessions', 'Phiên live', nf1.format(x.sessions)],
+    ['hours', 'Giờ live', hoursTxt(x.hours)], ['revph', 'Doanh số / giờ', money(x.revph)], ['aov', 'Giá trị đơn TB', money(x.aov)],
+    ['viewers', 'Engaged viewers', nf0.format(x.viewers)], ['conv', 'Tỉ lệ chốt đơn', x.conv == null ? '–' : nf2.format(x.conv * 100) + '%'],
+  ];
+  return rows.map(([k, l, v]) => [k === highlight ? '▸ ' + l : l, v]);
+}
+function moveTip(ev) {
+  const w = tip.offsetWidth, hh = tip.offsetHeight;
+  let x = ev.clientX + 14, y = ev.clientY + 14;
+  if (x + w > innerWidth - 8) x = ev.clientX - w - 14;
+  if (y + hh > innerHeight - 8) y = ev.clientY - hh - 14;
+  tip.style.left = Math.max(8, x) + 'px'; tip.style.top = Math.max(8, y) + 'px';
+}
+function hideTip() { tip.style.display = 'none'; }
+
+/* ---------- bar chart ---------- */
+function niceMax(v) {
+  if (v <= 0) return 1;
+  const e = Math.pow(10, Math.floor(Math.log10(v))), f = v / e;
+  return [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].find(x => f <= x + 1e-9) * e;
+}
+/**
+ * cats: [{key,label,title}], series: [{key,label,color}], val(cat,ser) → number|null
+ * mode: 'stack' | 'group'
+ */
+function barChart({ cats, series, val, mode, fmt, full, height = 260, yMax, onClick, selected, totalLabel = 'Tổng', showTotals = true }) {
+  const box = h('div', { class: 'chart' });
+  const draw = () => {
+    const W = Math.max(280, box.clientWidth || 800), H = height;
+    const m = { l: 56, r: 8, t: showTotals ? 18 : 8, b: 26 };
+    const iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const totals = cats.map(c => series.reduce((a, s) => a + (val(c, s) || 0), 0));
+    let max = yMax || niceMax(mode === 'stack' ? Math.max(0, ...totals) : Math.max(0, ...cats.flatMap(c => series.map(s => val(c, s) || 0))));
+    const y = v => m.t + ih - (v / max) * ih;
+    const svg = sv('svg', { viewBox: `0 0 ${W} ${H}`, height: H, role: 'img' });
+    for (let i = 0; i <= 4; i++) {
+      const v = max * i / 4;
+      svg.append(sv('line', { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), stroke: i ? 'var(--grid)' : 'var(--axis)', 'stroke-width': 1 }));
+      svg.append(sv('text', { x: m.l - 8, y: y(v) + 4, 'text-anchor': 'end', class: 'ax' }, (fmt.axis || fmt)(v)));
+    }
+    const bw = iw / Math.max(1, cats.length);
+    const barW = Math.min(56, bw * 0.68);
+    const labelEvery = Math.ceil(cats.length / Math.max(1, Math.floor(iw / 44)));
+    cats.forEach((c, i) => {
+      const cx = m.l + bw * i + bw / 2;
+      const g = sv('g');
+      if (mode === 'stack') {
+        let acc = 0;
+        const segs = series.map(s => ({ s, v: val(c, s) || 0 })).filter(x => x.v > 0);
+        segs.forEach((x, j) => {
+          const y0 = y(acc), y1 = y(acc + x.v); acc += x.v;
+          const top = j === segs.length - 1;
+          const hgt = Math.max(0, y0 - y1 - (j ? 2 : 0));
+          if (hgt <= 0) return;
+          g.append(sv('path', { d: roundedTop(cx - barW / 2, y1, barW, hgt, top ? Math.min(4, hgt) : 0), fill: x.s.color }));
+        });
+        if (showTotals && totals[i] > 0 && (cats.length <= 16 || i % labelEvery === 0))
+          svg.append(sv('text', { x: cx, y: y(totals[i]) - 5, 'text-anchor': 'middle', class: 'lab' }, fmt(totals[i])));
+      } else {
+        const n = series.length, gw = barW, sw = Math.max(2, (gw - 2 * (n - 1)) / n);
+        series.forEach((s, j) => {
+          const v = val(c, s); if (!v || v <= 0) return;
+          const x = cx - gw / 2 + j * (sw + 2);
+          g.append(sv('path', { d: roundedTop(x, y(v), sw, y(0) - y(v), Math.min(4, sw / 2, y(0) - y(v))), fill: s.color }));
+        });
+      }
+      svg.append(g);
+      if (i % labelEvery === 0) svg.append(sv('text', { x: cx, y: H - 8, 'text-anchor': 'middle', class: 'ax' }, c.label));
+      const band = sv('rect', { x: m.l + bw * i, y: m.t, width: bw, height: ih, class: 'band' + (selected === c.key ? ' sel' : ''), tabindex: 0 });
+      const tipFn = ev => {
+        const rows = series.map(s => ({ color: s.color, label: s.label, value: val(c, s) == null ? '–' : full(val(c, s)) }));
+        showTip(ev, c.title || c.label, rows, mode === 'stack' && series.length > 1 ? { label: totalLabel, value: full(totals[i]) } : null);
+      };
+      band.addEventListener('pointerenter', tipFn);
+      band.addEventListener('pointermove', moveTip);
+      band.addEventListener('pointerleave', hideTip);
+      band.addEventListener('focus', ev => { const r = band.getBoundingClientRect(); tipFn({ clientX: r.right, clientY: r.top }); });
+      band.addEventListener('blur', hideTip);
+      if (onClick) band.addEventListener('click', () => { hideTip(); onClick(c.key); });
+      svg.insertBefore(band, svg.firstChild.nextSibling);
+    });
+    // bands should sit below marks visually but above for hit-testing: put them last with transparent fill
+    svg.querySelectorAll('.band').forEach(b => svg.append(b));
+    box.replaceChildren(svg);
+  };
+  box._draw = draw;
+  requestAnimationFrame(draw);
+  return box;
+}
+function roundedTop(x, y, w, hgt, r) {
+  if (r <= 0) return `M${x},${y}h${w}v${hgt}h${-w}z`;
+  return `M${x},${y + hgt}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + hgt}z`;
+}
+function legend(series) {
+  if (series.length < 2) return null;
+  return h('div', { class: 'legend' }, series.map(s => h('span', null, swatch(s.color), s.label)));
+}
+addEventListener('resize', () => document.querySelectorAll('.chart').forEach(c => c._draw && c._draw()));
+
+/* ---------- filters ---------- */
+function renderFilters(all) {
+  const u = S.ui;
+  const months = allMonths(all);
+  const toggle = (arr, v) => arr.includes(v) ? arr.filter(x => x !== v) : arr.concat(v);
+  const chip = (on, label, color, fn) => h('button', { class: 'chip' + (on ? ' on' : ''), onclick: fn, 'aria-pressed': on ? 'true' : 'false' }, color ? h('span', { class: 'dot', style: 'background:' + color }) : null, label);
+  const monthSel = (val, fn, ph) => h('select', { onchange: e => fn(e.target.value) },
+    h('option', { value: '' }, ph), months.map(m => { const o = h('option', { value: m }, monthLabel(m)); if (m === val) o.selected = true; return o; }));
+  const present = new Set(all.map(s => s.shift));
+  const brands = [...new Set(all.map(s => s.brand || ''))].sort();
+  u.brands = (u.brands || []).filter(b => brands.includes(b));
+  return h('div', { class: 'filters' },
+    h('div', { class: 'fgroup' }, h('span', { class: 'lbl' }, 'Tháng'),
+      monthSel(u.monthFrom, v => { u.monthFrom = v; render(); }, 'Từ đầu'),
+      h('span', { class: 'lbl' }, '→'),
+      monthSel(u.monthTo, v => { u.monthTo = v; render(); }, 'Mới nhất')),
+    brands.length > 1 ? h('div', { class: 'fgroup' }, h('span', { class: 'lbl' }, 'Brand'),
+      chip(!u.brands.length, 'Tất cả', null, () => { u.brands = []; render(); }),
+      brands.map(b => chip(u.brands.includes(b), brandLabel(b), null, () => { u.brands = toggle(u.brands, b); render(); }))) : null,
+    h('div', { class: 'fgroup' }, h('span', { class: 'lbl' }, 'Nền tảng'),
+      chip(!u.platforms.length, 'Tất cả', null, () => { u.platforms = []; render(); }),
+      PLATFORMS.map(p => chip(u.platforms.includes(p.key), p.label, p.color, () => { u.platforms = toggle(u.platforms, p.key); render(); }))),
+    h('div', { class: 'fgroup' }, h('span', { class: 'lbl' }, 'Ca'),
+      chip(!u.shifts.length, 'Tất cả', null, () => { u.shifts = []; render(); }),
+      shiftOrder().filter(n => n !== OUT_SHIFT || present.has(n) || u.shifts.includes(n)).map(n => chip(u.shifts.includes(n), [n, shiftHours(n) ? h('span', { style: 'font-size:11px;color:var(--muted);font-weight:400' }, shiftHours(n)) : null], shiftColor(n), () => { u.shifts = toggle(u.shifts, n); render(); }))),
+  );
+}
+
+/* ---------- tab: monthly revenue history ---------- */
+function stackSeries(list) {
+  const dim = S.ui.stackBy;
+  const keys = sortKeys(dim, [...new Set(list.map(DIMS[dim].key))]);
+  return { dim, series: keys.map((k, i) => ({ key: k, label: DIMS[dim].name(k), color: seriesColor(dim, k, i) })) };
+}
+function kpi(label, value, delta, deltaIsGood = true, note) {
+  let d = null;
+  if (delta != null && isFinite(delta)) {
+    const up = delta >= 0, good = up === deltaIsGood;
+    d = h('div', { class: 'd' }, h('span', { class: good ? 'up' : 'down' }, (up ? '▲ ' : '▼ ') + pct(delta)), ' ' + (note || 'so với tháng trước'));
+  } else if (note) d = h('div', { class: 'd' }, note);
+  return h('div', { class: 'kpi' }, h('div', { class: 'k' }, label), h('div', { class: 'v' }, value), d);
+}
+function renderHistory(list) {
+  const u = S.ui;
+  const months = allMonths(list);
+  if (!months.includes(u.selMonth)) u.selMonth = months[months.length - 1];
+  const byMonth = groupBy(list, s => s.ts.slice(0, 7));
+  const A = Object.fromEntries(months.map(m => [m, agg(byMonth.get(m))]));
+  const sel = u.selMonth, prev = months[months.indexOf(sel) - 1];
+  const a = A[sel];
+  // A month still in progress is compared with the same day range of the previous month
+  const [yy, mm] = sel.split('-').map(Number);
+  const nDays = new Date(yy, mm, 0).getDate();
+  const lastDay = Math.max(...byMonth.get(sel).map(s => s.d));
+  const partial = lastDay < nDays && sel === months[months.length - 1];
+  const b = !prev ? null : partial ? agg(byMonth.get(prev).filter(s => s.d <= lastDay)) : A[prev];
+  const cmpNote = !prev ? 'tháng đầu tiên' : partial ? `so với 1–${lastDay}/${monthLabel(prev)} (cùng kỳ)` : 'so với ' + monthLabel(prev);
+  const ch = (k) => b && b[k] ? a[k] / b[k] - 1 : null;
+  const metric = u.historyMetric;
+  const M = METRICS[metric];
+
+  const { dim, series } = stackSeries(list);
+  const cell = new Map();
+  for (const m of months) for (const [k, arr] of groupBy(byMonth.get(m), DIMS[dim].key)) cell.set(m + '|' + k, agg(arr));
+  const val = (c, s) => { const x = cell.get(c.key + '|' + s.key); return x ? x[metric] : (M.add ? 0 : null); };
+
+  const out = h('div');
+  out.append(h('div', { class: 'kpis' },
+    kpi('Doanh số ' + monthLabel(sel) + (partial ? ` (đến ${lastDay}/${mm})` : ''), compact(a.revenue), ch('revenue'), true, cmpNote),
+    kpi('Đơn hàng', nf0.format(a.orders), ch('orders'), true, cmpNote),
+    kpi('Phiên live', nf1.format(a.sessions), ch('sessions'), true, cmpNote),
+    kpi('Giờ live', hrs(a.minutes), ch('hours'), true, cmpNote),
+    kpi('Doanh số / giờ', compact(a.revph), ch('revph'), true, cmpNote),
+    kpi('Giá trị đơn TB', compact(a.aov), ch('aov'), true, cmpNote),
+  ));
+
+  const segBtn = (cur, opts, fn) => h('div', { class: 'seg' }, opts.map(([k, l]) => h('button', { class: cur === k ? 'on' : '', onclick: () => fn(k) }, l)));
+  const monthCats = months.map(m => ({ key: m, label: monthLabel(m), title: 'Tháng ' + monthLabel(m).slice(1) }));
+  const card1 = h('div', { class: 'card' },
+    h('div', { class: 'row-head' },
+      h('div', null, h('h2', null, 'Lịch sử ' + M.label.toLowerCase() + ' theo tháng'), h('p', { class: 'hint' }, 'Bấm vào một tháng để xem chi tiết theo ngày và theo ca bên dưới.')),
+      h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' },
+        h('select', { onchange: e => { u.historyMetric = e.target.value; render(); } },
+          Object.entries(METRICS).map(([k, v]) => { const o = h('option', { value: k }, v.label); if (k === metric) o.selected = true; return o; })),
+        segBtn(dim, [['platform', 'Theo nền tảng'], ['shift', 'Theo ca']], k => { u.stackBy = k; render(); }))),
+    legend(series),
+    barChart({ cats: monthCats, series, val, mode: M.add ? 'stack' : 'group', fmt: M.fmt, full: M.full, selected: sel, onClick: k => { u.selMonth = k; render(); } }),
+  );
+  out.append(card1);
+
+  // history table
+  const pk = sortKeys('platform', [...new Set(list.map(s => s.p))]);
+  const byMP = new Map();
+  for (const m of months) for (const [p, arr] of groupBy(byMonth.get(m), s => s.p)) byMP.set(m + '|' + p, agg(arr));
+  const thead = h('tr', null, h('th', null, 'Tháng'),
+    pk.map(p => h('th', null, h('span', { class: 'pill' }, swatch(seriesColor('platform', p)), DIMS.platform.name(p)))),
+    h('th', null, 'Tổng doanh số'), h('th', null, '± tháng trước'), h('th', null, 'Đơn'), h('th', null, 'Phiên'),
+    h('th', null, 'Giờ live'), h('th', null, 'DS / giờ'), h('th', null, 'Giá trị đơn TB'));
+  const tbody = h('tbody');
+  months.slice().reverse().forEach((m) => {
+    const x = A[m], i = months.indexOf(m), p = i > 0 ? A[months[i - 1]] : null;
+    const d = p && p.revenue ? x.revenue / p.revenue - 1 : null;
+    tbody.append(h('tr', { class: 'clickable' + (m === sel ? ' sel' : ''), onclick: () => { u.selMonth = m; render(); } },
+      h('td', null, monthLabel(m)),
+      pk.map(pp => h('td', null, money((byMP.get(m + '|' + pp) || {}).revenue || 0))),
+      h('td', null, h('b', null, money(x.revenue))),
+      h('td', { class: d == null ? '' : d >= 0 ? 'up' : 'down' }, d == null ? '–' : (d >= 0 ? '▲ ' : '▼ ') + pct(d)),
+      h('td', null, nf0.format(x.orders)), h('td', null, nf1.format(x.sessions)),
+      h('td', null, hoursTxt(x.hours, true)), h('td', null, money(x.revph)), h('td', null, money(x.aov))));
+  });
+  const T = agg(list);
+  tbody.append(h('tr', { class: 'total' }, h('td', null, 'Tổng'),
+    pk.map(pp => h('td', null, money(agg(list.filter(s => s.p === pp)).revenue))),
+    h('td', null, money(T.revenue)), h('td', null, ''), h('td', null, nf0.format(T.orders)), h('td', null, nf1.format(T.sessions)),
+    h('td', null, hoursTxt(T.hours, true)), h('td', null, money(T.revph)), h('td', null, money(T.aov))));
+  out.append(h('div', { class: 'card' }, h('h2', null, 'Bảng doanh số theo tháng'), h('p', { class: 'hint' }, 'Mới nhất ở trên. Bấm một dòng để chọn tháng.'),
+    h('div', { class: 'tblwrap' }, h('table', null, h('thead', null, thead), tbody))));
+
+  // month detail: daily chart + shift table
+  const mList = byMonth.get(sel);
+  const byDay = new Map();
+  for (const [k, arr] of groupBy(mList, s => pad(s.d) + '|' + DIMS[dim].key(s))) byDay.set(k, agg(arr));
+  const dayCats = Array.from({ length: nDays }, (_, i) => {
+    const d = i + 1, wd = WEEKDAYS[new Date(yy, mm - 1, d).getDay()];
+    return { key: pad(d), label: String(d), title: `${wd}, ${pad(d)}/${pad(mm)}/${yy}` };
+  });
+  const dval = (c, s) => { const x = byDay.get(c.key + '|' + s.key); return x ? x[metric] : (M.add ? 0 : null); };
+  out.append(h('div', { class: 'card' },
+    h('h2', null, M.label + ' theo ngày · ' + monthLabel(sel)),
+    h('p', { class: 'hint' }, 'Nhiều phiên trong cùng một ngày được cộng dồn.'),
+    legend(series),
+    barChart({ cats: dayCats, series, val: dval, mode: M.add ? 'stack' : 'group', fmt: M.fmt, full: M.full, height: 220, showTotals: false }),
+  ));
+
+  const shiftTables = h('div', { class: 'grid2' });
+  const platformsHere = sortKeys('platform', [...new Set(mList.map(s => s.p))]);
+  for (const p of platformsHere) {
+    const pl = mList.filter(s => s.p === p);
+    const g = groupBy(pl, s => s.shift);
+    const keys = sortKeys('shift', [...g.keys()]);
+    const tb = h('tbody');
+    for (const k of keys) {
+      const x = agg(g.get(k) || []);
+      tb.append(h('tr', null, h('td', null, h('span', { class: 'pill' }, swatch(shiftColor(k)), k)),
+        h('td', null, nf1.format(x.sessions)), h('td', null, hoursTxt(x.hours, true)), h('td', null, nf0.format(x.orders)),
+        h('td', { title: money(x.revenue) }, compact(x.revenue)), h('td', { title: money(x.revph) }, compact(x.revph))));
+    }
+    const t = agg(pl);
+    tb.append(h('tr', { class: 'total' }, h('td', null, 'Tổng cộng'), h('td', null, nf1.format(t.sessions)), h('td', null, hoursTxt(t.hours, true)),
+      h('td', null, nf0.format(t.orders)), h('td', { title: money(t.revenue) }, compact(t.revenue)), h('td', { title: money(t.revph) }, compact(t.revph))));
+    shiftTables.append(h('div', { class: 'card', style: 'margin:0' },
+      h('h2', null, h('span', { class: 'pill' }, swatch(seriesColor('platform', p)), DIMS.platform.name(p) + ' ' + monthLabel(sel) + ' · theo ca')),
+      h('div', { class: 'tblwrap', style: 'margin-top:8px' }, h('table', null,
+        h('thead', null, h('tr', null, ['Ca', 'Phiên', 'Giờ live', 'Đơn', 'Doanh số', 'DS / giờ'].map(x => h('th', null, x)))), tb))));
+  }
+  out.append(shiftTables);
+  return out;
+}
+
+/* ---------- tab: pivot / facet ---------- */
+function renderPivot(list) {
+  const u = S.ui, P = u.pivot;
+  const M = METRICS[P.metric];
+  const dimSel = (key, allowNone) => h('select', { onchange: e => { P[key] = e.target.value; render(); } },
+    allowNone ? h('option', { value: '' }, '— không —') : null,
+    Object.entries(DIMS).map(([k, d]) => { const o = h('option', { value: k }, d.label); if (P[key] === k) o.selected = true; return o; }));
+  const out = h('div');
+  out.append(h('div', { class: 'card' },
+    h('h2', null, 'Phân tích nhóm'),
+    h('p', { class: 'hint' }, 'Chọn chiều nhóm cho hàng, chuỗi (màu) và tách nhỏ (facet). Mỗi facet có biểu đồ + bảng riêng, cùng thang đo để so sánh.'),
+    h('div', { class: 'pivot-ctl' },
+      h('label', null, 'Chỉ số', h('select', { onchange: e => { P.metric = e.target.value; render(); } },
+        Object.entries(METRICS).map(([k, v]) => { const o = h('option', { value: k }, v.label); if (k === P.metric) o.selected = true; return o; }))),
+      h('label', null, 'Hàng (trục X)', dimSel('rows')),
+      h('label', null, 'Chuỗi màu', dimSel('cols', true)),
+      h('label', null, 'Tách theo', dimSel('facet', true)),
+      h('button', { onclick: () => { [P.rows, P.cols] = [P.cols || P.rows, P.rows]; render(); } }, '⇄ Đổi hàng/chuỗi'))));
+
+  const facetKeys = P.facet ? sortKeys(P.facet, [...new Set(list.map(DIMS[P.facet].key))]) : [''];
+  const colKeys = P.cols ? sortKeys(P.cols, [...new Set(list.map(DIMS[P.cols].key))]) : ['__all'];
+  const series = colKeys.map((k, i) => ({ key: k, label: P.cols ? DIMS[P.cols].name(k) : M.label, color: P.cols ? seriesColor(P.cols, k, i) : 'var(--s1)' }));
+  const rowKeys = sortKeys(P.rows, [...new Set(list.map(DIMS[P.rows].key))]);
+
+  // compute all cells once so every facet shares one y-scale
+  const cells = new Map(), rowTot = new Map(), facetTot = new Map(), cellArr = new Map(), rowArr = new Map(), facetArr = new Map();
+  for (const fk of facetKeys) {
+    const fl = P.facet ? list.filter(s => DIMS[P.facet].key(s) === fk) : list;
+    facetTot.set(fk, agg(fl));
+    for (const [k, arr] of groupBy(fl, s => DIMS[P.rows].key(s) + '|' + (P.cols ? DIMS[P.cols].key(s) : '__all'))) { cells.set(fk + '|' + k, agg(arr)); cellArr.set(fk + '|' + k, arr); }
+    for (const [k, arr] of groupBy(fl, s => DIMS[P.rows].key(s))) rowArr.set(fk + '|' + k, arr);
+    facetArr.set(fk, fl);
+    for (const [k, arr] of groupBy(fl, s => DIMS[P.rows].key(s))) rowTot.set(fk + '|' + k, agg(arr));
+  }
+  const colTot = (fk, ck) => agg((P.facet ? list.filter(s => DIMS[P.facet].key(s) === fk) : list).filter(s => !P.cols || DIMS[P.cols].key(s) === ck));
+  let yMax = 0;
+  for (const fk of facetKeys) for (const rk of rowKeys) {
+    if (M.add) yMax = Math.max(yMax, (rowTot.get(fk + '|' + rk) || {})[P.metric] || 0);
+    else for (const ck of colKeys) yMax = Math.max(yMax, (cells.get(fk + '|' + rk + '|' + ck) || {})[P.metric] || 0);
+  }
+  yMax = niceMax(yMax);
+  const tooMany = series.length > 8;
+  const cellMax = Math.max(...[...cells.values()].map(x => x[P.metric] || 0), 0);
+
+  const wrap = h('div', { class: P.facet && facetKeys.length > 1 ? 'grid2' : '' });
+  for (const fk of facetKeys) {
+    const presentRows = rowKeys.filter(rk => P.rows === 'shift' || rowTot.has(fk + '|' + rk));
+    const cats = presentRows.map(rk => ({ key: rk, label: DIMS[P.rows].name(rk) }));
+    const val = (c, s) => { const x = cells.get(fk + '|' + c.key + '|' + s.key); return x ? x[P.metric] : (M.add ? 0 : null); };
+    const card = h('div', { class: 'card', style: P.facet ? 'margin:0' : '' });
+    if (P.facet) card.append(h('h2', null, DIMS[P.facet].label + ': ' + DIMS[P.facet].name(fk) + ' · ' + M.full(facetTot.get(fk)[P.metric])));
+    if (!tooMany) {
+      card.append(legend(series));
+      card.append(barChart({ cats, series, val, mode: M.add ? 'stack' : 'group', fmt: M.fmt, full: M.full, yMax, height: P.facet ? 220 : 280, showTotals: cats.length <= 16 }));
+    } else card.append(h('p', { class: 'hint' }, `Biểu đồ ẩn vì có ${series.length} chuỗi (tối đa 8) — hãy đổi hàng/chuỗi. Bảng vẫn đầy đủ.`));
+    // table with heat shading
+    const thr = h('tr', null, h('th', null, DIMS[P.rows].label),
+      P.cols ? colKeys.map(ck => h('th', null, DIMS[P.cols].name(ck))) : null, h('th', null, 'Tổng'));
+    const tb = h('tbody');
+    for (const rk of presentRows) {
+      const tr = h('tr', null, h('td', null, DIMS[P.rows].name(rk)));
+      if (P.cols) for (const ck of colKeys) {
+        const x = cells.get(fk + '|' + rk + '|' + ck), v = x ? x[P.metric] : null;
+        const a = v && cellMax ? 0.05 + 0.4 * v / cellMax : 0;
+        tr.append(selCell(h('td', { style: a ? `background:rgba(var(--heat),${a.toFixed(3)})` : '' }, v == null ? '–' : M.full(v)), cellArr.get(fk + '|' + rk + '|' + ck)));
+      }
+      const rt = rowTot.get(fk + '|' + rk) || agg([]);
+      tr.append(selCell(h('td', null, h('b', null, M.full(rt[P.metric]))), rowArr.get(fk + '|' + rk)));
+      tb.append(tr);
+    }
+    tb.append(h('tr', { class: 'total' }, h('td', null, 'Tổng'),
+      P.cols ? colKeys.map(ck => selCell(h('td', null, M.full(colTot(fk, ck)[P.metric])), (facetArr.get(fk) || []).filter(s => DIMS[P.cols].key(s) === ck))) : null,
+      selCell(h('td', null, M.full(facetTot.get(fk)[P.metric])), facetArr.get(fk))));
+    card.append(h('div', { class: 'tblwrap', 'data-selgroup': 'pivot-' + fk, style: 'margin-top:8px;max-height:420px;overflow:auto' }, h('table', null, h('thead', null, thr), tb)));
+    wrap.append(card);
+  }
+  out.append(wrap);
+  return out;
+}
+
+/* ---------- tab: sessions ---------- */
+function renderSessions(list) {
+  const u = S.ui;
+  const months = allMonths(list);
+  const ids = new Set((u.sessMonth ? list.filter(s => s.ts.startsWith(u.sessMonth)) : list).map(s => s.id));
+  const labels = new Map(list.map(s => [s.id, s.shiftLabel])), hostLabels = new Map(list.map(s => [s.id, s.hostLabel]));
+  const rows = [...ids].map(id => Object.assign({}, S.sessions[id], { shift: labels.get(id), hostLabel: hostLabels.get(id), w: 1 }));
+  const withCalc = rows.map(s => Object.assign({}, s, { revph: s.dur ? s.revenue / (s.dur / 60) : null }));
+  const k = u.sort.key, dir = u.sort.dir;
+  withCalc.sort((a, b) => { const x = a[k], y = b[k]; return (x == null) - (y == null) || (x < y ? -dir : x > y ? dir : 0); });
+  const cols = [['ts', 'Thời gian bắt đầu'], ['p', 'Nền tảng'], ['shift', 'Ca'], ['hostLabel', 'Người live'], ['dur', 'Thời lượng'], ['viewers', 'Viewers'], ['orders', 'Đơn'], ['revenue', 'Doanh số'], ['revph', 'DS / giờ']];
+  const thr = h('tr', null, cols.map(([key, lbl]) => h('th', { class: 'sort', style: key === 'shift' || key === 'hostLabel' ? 'text-align:left' : null, onclick: () => { u.sort = { key, dir: u.sort.key === key ? -u.sort.dir : -1 }; render(); } }, lbl + (k === key ? (dir > 0 ? ' ▲' : ' ▼') : ''))));
+  const tb = h('tbody');
+  for (const s of withCalc) {
+    const wd = WEEKDAYS[isoWeekday(s)];
+    tb.append(h('tr', null,
+      h('td', null, `${wd} ${pad(s.d)}/${pad(s.m)}/${s.y} ${pad(s.H)}:${pad(s.M)}`),
+      h('td', null, h('span', { class: 'pill' }, swatch(seriesColor('platform', s.p)), DIMS.platform.name(s.p))),
+      h('td', { style: 'text-align:left' }, s.shift), h('td', { style: 'text-align:left' }, s.hostLabel), h('td', null, durFmt(s.dur)), h('td', null, nf0.format(s.viewers)),
+      h('td', null, nf0.format(s.orders)), h('td', null, money(s.revenue)), h('td', null, money(s.revph))));
+  }
+  const t = agg(rows);
+  return h('div', { class: 'card' },
+    h('div', { class: 'row-head' },
+      h('div', null, h('h2', null, 'Danh sách phiên live'), h('p', { class: 'hint' }, `${nf0.format(rows.length)} phiên · ${money(t.revenue)} · ${hrs(t.minutes)}`)),
+      h('select', { onchange: e => { u.sessMonth = e.target.value; render(); } }, h('option', { value: '' }, 'Tất cả tháng'),
+        months.map(m => { const o = h('option', { value: m }, monthLabel(m)); if (m === u.sessMonth) o.selected = true; return o; }))),
+    h('div', { class: 'tblwrap', style: 'max-height:640px;overflow:auto' }, h('table', null, h('thead', null, thr), tb)));
+}
+
+/* ---------- tab: compare periods ---------- */
+function ymd(dt) { return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`; }
+function parseYmd(str) { const [y, m, d] = str.split('-').map(Number); return new Date(y, m - 1, d); }
+function addDays(str, n) { const d = parseYmd(str); d.setDate(d.getDate() + n); return ymd(d); }
+function daysBetween(a, b) { return Math.round((parseYmd(b) - parseYmd(a)) / 864e5); }
+function dm(str) { return str.slice(8, 10) + '/' + str.slice(5, 7); }
+function dmy(str) { return dm(str) + '/' + str.slice(0, 4); }
+function shiftMonths(str, n) { // same day n months earlier, clamped to that month's length
+  const [y, m, d] = str.split('-').map(Number);
+  const t = y * 12 + (m - 1) - n, py = Math.floor(t / 12), pm = t - py * 12 + 1;
+  return `${py}-${pad(pm)}-${pad(Math.min(d, new Date(py, pm, 0).getDate()))}`;
+}
+function monthsBetween(a, b) { return (+b.slice(0, 4) - +a.slice(0, 4)) * 12 + (+b.slice(5, 7) - +a.slice(5, 7)); }
+function prevMonthDate(str) {
+  const [y, m, d] = str.split('-').map(Number);
+  const py = m === 1 ? y - 1 : y, pm = m === 1 ? 12 : m - 1;
+  return `${py}-${pad(pm)}-${pad(Math.min(d, new Date(py, pm, 0).getDate()))}`;
+}
+// Week keys: 'iso' → Monday date; 'month' → YYYY-MM-Wn (1–7, 8–14, 15–21, 22–end)
+function weekRange(type, key) {
+  if (type === 'iso') return { from: key, to: addDays(key, 6) };
+  const [y, m, w] = [+key.slice(0, 4), +key.slice(5, 7), +key.slice(9)];
+  const last = w === 4 ? new Date(y, m, 0).getDate() : w * 7;
+  return { from: `${y}-${pad(m)}-${pad((w - 1) * 7 + 1)}`, to: `${y}-${pad(m)}-${pad(last)}` };
+}
+function weekKeyOf(type, dateStr) {
+  if (type === 'iso') { const d = parseYmd(dateStr); return addDays(dateStr, -((d.getDay() + 6) % 7)); }
+  return dateStr.slice(0, 7) + '-W' + Math.min(4, Math.ceil(+dateStr.slice(8) / 7));
+}
+function prevWeekKey(type, key) {
+  if (type === 'iso') return addDays(key, -7);
+  const w = +key.slice(9);
+  if (w > 1) return key.slice(0, 9) + (w - 1);
+  return prevMonthDate(key.slice(0, 7) + '-01').slice(0, 7) + '-W4';
+}
+function weekLabel(type, key) {
+  const r = weekRange(type, key);
+  return type === 'iso' ? `${dm(r.from)} – ${dmy(r.to)}` : `Tuần ${key.slice(9)} ${monthLabel(key.slice(0, 7))} (${dm(r.from)} – ${dm(r.to)})`;
+}
+
+function renderCompare() {
+  const u = S.ui, C = u.cmp;
+  const list = filteredNoMonth();
+  const dates = [...new Set(list.map(s => s.ts.slice(0, 10)))].sort();
+  const firstDate = dates[0], lastDate = dates[dates.length - 1];
+  if (!dates.length) return h('div', { class: 'empty' }, 'Không có phiên nào khớp bộ lọc.');
+  const M = METRICS[C.metric];
+
+  // ---- resolve the period being looked at (cur) and the baseline it is compared with (prev)
+  let cur, prev, curName, prevName, trimmedLen = null;
+  const controls = h('div', { class: 'pivot-ctl' });
+  const baseCtl = h('div', { class: 'pivot-ctl', style: 'margin-top:-4px' });
+  const segBtn = (cur, opts, fn) => h('div', { class: 'seg' }, opts.map(([k, l]) => h('button', { class: cur === k ? 'on' : '', onclick: () => fn(k) }, l)));
+  const opt = (v, l, sel) => { const o = h('option', { value: v }, l); if (sel) o.selected = true; return o; };
+  const di = (key, min, max) => h('input', { id: 'cmp-' + key, type: 'date', value: C[key], min, max, onchange: e => { if (e.target.value) { C[key] = e.target.value; render(); } } });
+  controls.append(segBtn(C.view || 'pair', [['pair', '1 kỳ so sánh'], ['all', 'Tất cả các kỳ']], k => { C.view = k; render(); }));
+  controls.append(segBtn(C.mode, [['week', 'Theo tuần'], ['month', 'Theo khoảng ngày']], k => { C.mode = k; render(); }));
+  const trimNeeded = r => C.sameLen && r.to > lastDate && r.from <= lastDate;
+
+  if (C.mode === 'week') {
+    const keys = [...new Set(dates.map(d => weekKeyOf(C.weekType, d)))].sort().reverse();
+    if (!keys.includes(C.week)) C.week = keys[0];
+    cur = weekRange(C.weekType, C.week);
+    if (trimNeeded(cur)) { trimmedLen = daysBetween(cur.from, lastDate); cur = { from: cur.from, to: lastDate }; }
+    const prevKey = prevWeekKey(C.weekType, C.week);
+    const baseKey = C.baseWeek && keys.includes(C.baseWeek) && C.baseWeek !== C.week ? C.baseWeek : prevKey;
+    prev = weekRange(C.weekType, baseKey);
+    if (trimmedLen != null) prev.to = addDays(prev.from, trimmedLen);
+    curName = 'Tuần đã chọn';
+    prevName = baseKey === prevKey ? 'Tuần trước' : 'Tuần so sánh';
+    controls.append(
+      h('label', null, 'Kiểu tuần', segBtn(C.weekType, [['iso', 'Thứ 2 – CN'], ['month', 'Tuần trong tháng']], k => { C.weekType = k; C.week = ''; C.baseWeek = ''; render(); })),
+      h('label', null, 'Tuần', h('select', { id: 'cmp-week', onchange: e => { C.week = e.target.value; C.baseWeek = ''; render(); } },
+        keys.map(k => opt(k, weekLabel(C.weekType, k), k === C.week)))));
+    baseCtl.append(h('label', null, 'So với', h('select', { id: 'cmp-base-week', onchange: e => { C.baseWeek = e.target.value; render(); } },
+      opt('', 'Tuần liền trước', baseKey === prevKey),
+      keys.filter(k => k !== C.week && k !== prevKey).map(k => opt(k, weekLabel(C.weekType, k), k === baseKey)))));
+  } else {
+    if (!C.from || !C.to) { C.to = lastDate; C.from = lastDate.slice(0, 8) + '01'; }
+    if (C.from > C.to) [C.from, C.to] = [C.to, C.from];
+    cur = { from: C.from, to: C.to };
+    if (trimNeeded(cur)) { trimmedLen = daysBetween(cur.from, lastDate); cur = { from: cur.from, to: lastDate }; }
+    const maxOff = Math.max(1, monthsBetween(firstDate, cur.to));
+    const off = C.baseOff === 'custom' ? 'custom' : Math.min(Math.max(1, +C.baseOff || 1), maxOff);
+    if (off === 'custom') {
+      if (!C.bfrom || !C.bto) { C.bfrom = shiftMonths(cur.from, 1); C.bto = shiftMonths(cur.to, 1); }
+      if (C.bfrom > C.bto) [C.bfrom, C.bto] = [C.bto, C.bfrom];
+      prev = { from: C.bfrom, to: C.bto };
+      prevName = 'Khoảng so sánh';
+    } else {
+      prev = { from: shiftMonths(cur.from, off), to: shiftMonths(cur.to, off) };
+      prevName = off === 1 ? 'Cùng kỳ tháng trước' : `Cùng kỳ ${off} tháng trước`;
+    }
+    curName = 'Kỳ đã chọn';
+    const preset = (label, from, to) => h('button', { onclick: () => { C.from = from; C.to = to; render(); } }, label);
+    controls.append(
+      h('label', null, 'Từ', di('from', firstDate, lastDate)), h('label', null, 'Đến', di('to', firstDate, lastDate)),
+      h('div', { class: 'fgroup' },
+        preset('Tháng này đến nay', lastDate.slice(0, 8) + '01', lastDate),
+        preset('7 ngày gần nhất', addDays(lastDate, -6), lastDate),
+        preset('Tuần này', weekKeyOf('iso', lastDate), lastDate),
+        preset('Ngày cuối', lastDate, lastDate)));
+    baseCtl.append(h('label', null, 'So với', h('select', { id: 'cmp-base-off', onchange: e => { C.baseOff = e.target.value; render(); } },
+      Array.from({ length: maxOff }, (_, i) => i + 1).map(k => {
+        const r = { from: shiftMonths(cur.from, k), to: shiftMonths(cur.to, k) };
+        return opt(k, (k === 1 ? 'Cùng kỳ tháng trước' : `Cùng kỳ ${k} tháng trước`) + ` (${dm(r.from)} – ${dmy(r.to)})`, off === k);
+      }),
+      opt('custom', 'Khoảng ngày tự chọn…', off === 'custom'))));
+    if (off === 'custom') baseCtl.append(h('label', null, 'Từ', di('bfrom', firstDate, lastDate)), h('label', null, 'Đến', di('bto', firstDate, lastDate)));
+  }
+  controls.append(h('label', null, h('input', { id: 'cmp-samelen', type: 'checkbox', checked: C.sameLen ? 'checked' : null, onchange: e => { C.sameLen = e.target.checked; render(); } }), 'Cắt các kỳ bằng số ngày có dữ liệu'));
+  const note = trimmedLen == null ? '' : `Kỳ đang xem chỉ có dữ liệu đến ${dmy(lastDate)} → mỗi kỳ được so sánh ${trimmedLen + 1} ngày đầu.`;
+
+  const inR = r => s => { const d = s.ts.slice(0, 10); return d >= r.from && d <= r.to; };
+  const A = list.filter(inR(cur)), B = list.filter(inR(prev));
+  const a = agg(A), b = agg(B);
+  const rangeTxt = r => r.from === r.to ? dmy(r.from) : `${dm(r.from)} – ${dmy(r.to)}`;
+
+  const out = h('div');
+  out.append(h('div', { class: 'card' },
+    h('h2', null, 'So sánh kỳ'),
+    h('p', { class: 'hint' }, 'So với bất kỳ tuần / khoảng ngày nào trong lịch sử. Bộ lọc nền tảng và ca ở trên được áp dụng; bộ lọc tháng thì không.'),
+    controls, C.view === 'all' ? null : baseCtl,
+    h('div', { class: 'legend', style: 'margin-top:4px' },
+      h('span', null, swatch('var(--s1)'), `${curName}: ${rangeTxt(cur)} (${daysBetween(cur.from, cur.to) + 1} ngày)`),
+      C.view === 'all' ? null : h('span', null, swatch('var(--other)'), `${prevName}: ${rangeTxt(prev)} (${daysBetween(prev.from, prev.to) + 1} ngày)`)),
+    note ? h('p', { class: 'hint', style: 'margin:4px 0 0' }, 'ⓘ ' + note) : null));
+
+  // ---- the same period across all history; a row click makes it the baseline
+  const periods = [];
+  if (C.mode === 'week') {
+    for (const k of [...new Set(dates.map(d => weekKeyOf(C.weekType, d)))].sort().reverse()) {
+      const r = weekRange(C.weekType, k);
+      if (trimmedLen != null) r.to = addDays(r.from, trimmedLen);
+      periods.push({ r, label: trimmedLen != null ? rangeTxt(r) : weekLabel(C.weekType, k), isCur: k === C.week, pick: () => { C.baseWeek = k; C.view = 'pair'; render(); } });
+    }
+  } else {
+    for (let k = 0; shiftMonths(cur.to, k) >= firstDate; k++) {
+      const r = { from: shiftMonths(cur.from, k), to: shiftMonths(cur.to, k) };
+      periods.push({ r, label: rangeTxt(r), isCur: k === 0, pick: () => { C.baseOff = k; C.view = 'pair'; render(); } });
+    }
+  }
+  periods.forEach(p => { p.x = agg(list.filter(inR(p.r))); p.isBase = p.r.from === prev.from && p.r.to === prev.to; });
+  const others = periods.filter(p => !p.isCur);
+  const maxRev = Math.max(1, ...periods.map(p => p.x.revenue));
+  const deltaTd = (x, y) => { const r = y ? x / y - 1 : null; return h('td', { class: r == null ? '' : r >= 0 ? 'up' : 'down' }, r == null ? '–' : (r >= 0 ? '▲ ' : '▼ ') + pct(r)); };
+  const htb = h('tbody');
+  for (const p of periods) {
+    htb.append(h('tr', { class: (p.isCur ? '' : 'clickable') + (p.isBase ? ' sel' : ''), onclick: p.isCur ? null : p.pick, title: p.isCur ? null : 'Bấm để so sánh với kỳ này' },
+      h('td', null, p.label, p.isCur ? h('b', { style: 'color:var(--accent)' }, '  · đang xem') : p.isBase ? h('b', { style: 'color:var(--text-2)' }, '  · đang so sánh') : null),
+      h('td', { style: 'min-width:180px' }, h('div', { style: 'display:flex;align-items:center;gap:8px;justify-content:flex-end' },
+        h('span', { style: `display:inline-block;height:8px;border-radius:2px;width:${Math.round(90 * p.x.revenue / maxRev)}px;background:${p.isCur ? 'var(--s1)' : 'var(--other)'}` }),
+        h('span', null, compact(p.x.revenue)))),
+      h('td', null, nf0.format(p.x.orders)), h('td', null, nf1.format(p.x.sessions)), h('td', null, compact(p.x.revph)),
+      p.isCur ? h('td', { style: 'color:var(--muted)' }, '—') : deltaTd(a.revenue, p.x.revenue)));
+  }
+  if (others.length > 1) {
+    const avg = k => others.reduce((t, p) => t + p.x[k], 0) / others.length;
+    const avgRev = avg('revenue'), avgHours = avg('hours');
+    htb.append(h('tr', { class: 'total' }, h('td', null, `Trung bình ${others.length} kỳ khác`),
+      h('td', null, compact(avgRev)), h('td', null, nf0.format(avg('orders'))), h('td', null, nf1.format(avg('sessions'))),
+      h('td', null, compact(avgHours ? avgRev / avgHours : null)), deltaTd(a.revenue, avgRev)));
+  }
+  const historyCard = h('div', { class: 'card' },
+    h('h2', null, C.mode === 'week' ? 'Tất cả các tuần trong lịch sử' : 'Cùng khoảng ngày ở mọi tháng trong lịch sử'),
+    h('p', { class: 'hint' }, (trimmedLen != null ? `Mỗi kỳ tính ${trimmedLen + 1} ngày đầu để so sánh công bằng. ` : '') + 'Cột cuối: kỳ đang xem cao / thấp hơn kỳ đó bao nhiêu %. Bấm một dòng để so sánh riêng với kỳ đó.'),
+    h('div', { class: 'tblwrap', style: 'max-height:360px;overflow:auto' }, h('table', null,
+      h('thead', null, h('tr', null, ['Kỳ', 'Doanh số', 'Đơn', 'Phiên', 'DS / giờ', 'Kỳ đang xem ±'].map(x => h('th', null, x)))), htb)));
+
+  // In the all-periods view the headline figures compare against the average of every other period
+  const allView = C.view === 'all' && others.length > 0;
+  let bb = b, pn = prevName.toLowerCase();
+  if (allView) {
+    const avgOf = k => others.reduce((t, p) => t + p.x[k], 0) / others.length;
+    bb = { revenue: avgOf('revenue'), orders: avgOf('orders'), sessions: avgOf('sessions'), minutes: avgOf('minutes'), hours: avgOf('hours') };
+    bb.revph = bb.hours ? bb.revenue / bb.hours : null; bb.aov = bb.orders ? bb.revenue / bb.orders : null;
+    pn = `TB ${others.length} kỳ khác`;
+  }
+  const d = k => bb[k] ? a[k] / bb[k] - 1 : null;
+  out.append(h('div', { class: 'kpis' },
+    kpi('Doanh số', compact(a.revenue), d('revenue'), true, pn + ' · ' + compact(bb.revenue)),
+    kpi('Đơn hàng', nf0.format(a.orders), d('orders'), true, pn + ' · ' + nf0.format(bb.orders)),
+    kpi('Phiên live', nf1.format(a.sessions), d('sessions'), true, pn + ' · ' + nf1.format(bb.sessions)),
+    kpi('Giờ live', hrs(a.minutes), d('hours'), true, pn + ' · ' + hrs(bb.minutes)),
+    kpi('Doanh số / giờ', compact(a.revph), d('revph'), true, pn + ' · ' + compact(bb.revph)),
+    kpi('Giá trị đơn TB', compact(a.aov), d('aov'), true, pn + ' · ' + compact(bb.aov)),
+  ));
+  if (allView) { out.append(renderAllPeriods(list, periods, C)); out.append(historyCard); return out; }
+  out.append(historyCard);
+
+  // ---- day-by-day chart, days aligned by position in each period
+  const ser = [{ key: 'cur', label: curName, color: 'var(--s1)' }, { key: 'prev', label: prevName, color: 'var(--other)' }];
+  const n = Math.max(daysBetween(cur.from, cur.to), daysBetween(prev.from, prev.to)) + 1;
+  const dayAgg = (arr, r) => { const g = groupBy(arr, s => s.ts.slice(0, 10)); return i => { const dd = addDays(r.from, i); return dd > r.to ? null : { date: dd, x: agg(g.get(dd) || []) }; }; };
+  const ca = dayAgg(A, cur), pa = dayAgg(B, prev);
+  const dayCats = Array.from({ length: n }, (_, i) => {
+    const c = ca(i), p = pa(i);
+    const lbl = c ? WEEKDAYS[parseYmd(c.date).getDay()] + ' ' + dm(c.date) : 'Ngày ' + (i + 1);
+    return { key: i, label: c ? (n > 10 ? String(+c.date.slice(8)) : lbl) : '', title: `${c ? lbl : '—'}  vs  ${p ? WEEKDAYS[parseYmd(p.date).getDay()] + ' ' + dm(p.date) : '—'}` };
+  });
+  const dval = (c, s) => { const r = (s.key === 'cur' ? ca : pa)(c.key); return r ? r.x[C.metric] : null; };
+  out.append(h('div', { class: 'card' },
+    h('div', { class: 'row-head' },
+      h('div', null, h('h2', null, M.label + ' theo ngày'), h('p', { class: 'hint' }, 'Ngày thứ N của kỳ này đặt cạnh ngày thứ N của kỳ trước. Rê chuột để xem ngày cụ thể.')),
+      h('select', { onchange: e => { C.metric = e.target.value; render(); } },
+        Object.entries(METRICS).map(([k, v]) => { const o = h('option', { value: k }, v.label); if (k === C.metric) o.selected = true; return o; }))),
+    legend(ser),
+    barChart({ cats: dayCats, series: ser, val: dval, mode: 'group', fmt: M.fmt, full: M.full, height: 240, showTotals: false })));
+
+  // ---- breakdown by platform and shift
+  const grouped = h('div', { class: 'grid2' });
+  for (const dim of ['platform', 'shift']) {
+    const gA = groupBy(A, DIMS[dim].key), gB = groupBy(B, DIMS[dim].key);
+    const keys = sortKeys(dim, [...new Set([...gA.keys(), ...gB.keys()])]);
+    const cats = keys.map(k => ({ key: k, label: DIMS[dim].name(k) }));
+    const val = (c, s) => { const arr = (s.key === 'cur' ? gA : gB).get(c.key); return arr ? agg(arr)[C.metric] : (M.add ? 0 : null); };
+    grouped.append(h('div', { class: 'card', style: 'margin:0' },
+      h('h2', null, M.label + ' theo ' + DIMS[dim].label.toLowerCase()),
+      legend(ser),
+      barChart({ cats, series: ser, val, mode: 'group', fmt: M.fmt, full: M.full, height: 200, showTotals: false })));
+  }
+  out.append(grouped);
+
+  const cols = [['revenue', 'Doanh số', compact], ['orders', 'Đơn', v => nf0.format(v)], ['sessions', 'Phiên', v => nf0.format(v)], ['revph', 'DS / giờ', compact]];
+  const deltaCell = (x, y) => { const r = y ? x / y - 1 : null; return h('td', { class: r == null ? '' : r >= 0 ? 'up' : 'down' }, r == null ? '–' : (r >= 0 ? '▲ ' : '▼ ') + pct(r)); };
+  const tb = h('tbody');
+  const addRow = (label, xa, xb, cls) => tb.append(h('tr', { class: cls || '' }, h('td', null, label),
+    cols.flatMap(([k, , f]) => [h('td', null, xa[k] == null ? '–' : f(xa[k])), h('td', { style: 'color:var(--text-2)' }, xb[k] == null ? '–' : f(xb[k])), deltaCell(xa[k], xb[k])])));
+  for (const dim of ['platform', 'shift']) {
+    const gA = groupBy(A, DIMS[dim].key), gB = groupBy(B, DIMS[dim].key);
+    for (const k of sortKeys(dim, [...new Set([...gA.keys(), ...gB.keys()])]))
+      addRow(h('span', { class: 'pill' }, swatch(seriesColor(dim, k)), DIMS[dim].name(k)), agg(gA.get(k) || []), agg(gB.get(k) || []));
+    if (dim === 'platform') tb.append(h('tr', null, h('td', { colspan: 13, style: 'color:var(--muted);font-size:12px;padding-top:12px' }, 'Theo ca')));
+  }
+  addRow('Tổng', a, b, 'total');
+  out.append(h('div', { class: 'card', style: 'margin-top:16px' },
+    h('h2', null, 'Bảng so sánh chi tiết'),
+    h('p', { class: 'hint' }, 'Mỗi chỉ số: kỳ này · kỳ trước (chữ nhạt) · chênh lệch.'),
+    h('div', { class: 'tblwrap' }, h('table', null,
+      h('thead', null,
+        h('tr', null, h('th'), cols.map(([, l]) => h('th', { colspan: 3, style: 'text-align:center' }, l))),
+        h('tr', null, h('th', null, 'Nhóm'), cols.flatMap(() => [h('th', null, 'Kỳ này'), h('th', null, 'Kỳ trước'), h('th', null, '±')]))),
+      tb))));
+  return out;
+}
+
+/* ---------- compare: every period at once ---------- */
+function renderAllPeriods(list, periods, C) {
+  const M = METRICS[C.metric];
+  const inR = r => s => { const d = s.ts.slice(0, 10); return d >= r.from && d <= r.to; };
+  // oldest → newest; past periods get stronger as they get more recent, the viewed period is the accent line
+  const ordered = periods.slice().reverse();
+  const past = ordered.filter(p => !p.isCur);
+  const n = Math.max(...periods.map(p => daysBetween(p.r.from, p.r.to) + 1));
+  const perDay = p => {
+    const g = groupBy(list.filter(inR(p.r)), s => s.ts.slice(0, 10));
+    const len = daysBetween(p.r.from, p.r.to) + 1;
+    let run = null;
+    const dayRows = Array.from({ length: len }, (_, i) => g.get(addDays(p.r.from, i)) || []);
+    return Array.from({ length: n }, (_, i) => {
+      if (i >= len) return null;
+      const x = agg(g.get(addDays(p.r.from, i)) || []);
+      if (!C.cumulative) return M.add ? x[C.metric] : x[C.metric];
+      run = run || { revenue: 0, orders: 0, sessions: 0, minutes: 0, viewers: 0 };
+      for (const k of ['revenue', 'orders', 'minutes', 'viewers']) run[k] += x[k];
+      run.sessions = agg(dayRows.slice(0, i + 1).flat()).sessions;
+      const h = run.minutes / 60;
+      return { revenue: run.revenue, orders: run.orders, sessions: run.sessions, hours: h, viewers: run.viewers,
+        revph: h ? run.revenue / h : null, aov: run.orders ? run.revenue / run.orders : null, conv: run.viewers ? run.orders / run.viewers : null }[C.metric];
+    });
+  };
+  const series = ordered.map(p => {
+    const k = past.indexOf(p);
+    return {
+      label: p.label, values: perDay(p), current: p.isCur,
+      color: p.isCur ? 'var(--s2)' : 'var(--s1)', width: p.isCur ? 3 : 1.5,
+      opacity: p.isCur ? 1 : 0.25 + 0.6 * (past.length > 1 ? k / (past.length - 1) : 1),
+    };
+  });
+  if (past.length > 1) {
+    const avg = Array.from({ length: n }, (_, i) => {
+      const v = past.map(s => series[ordered.indexOf(s)].values[i]).filter(v => v != null);
+      return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+    });
+    series.push({ label: `Trung bình ${past.length} kỳ khác`, values: avg, color: 'var(--text-2)', width: 2, dash: '5 4', opacity: 1 });
+  }
+  const cur = periods.find(p => p.isCur);
+  const cats = Array.from({ length: n }, (_, i) => {
+    const d = addDays(cur.r.from, i);
+    return { label: C.mode === 'week' ? WEEKDAYS[parseYmd(d).getDay()] : String(i + 1), title: `Ngày thứ ${i + 1} của mỗi kỳ` + (d <= cur.r.to ? ` (kỳ đang xem: ${WEEKDAYS[parseYmd(d).getDay()]} ${dm(d)})` : '') };
+  });
+  const segBtn = (v, opts, fn) => h('div', { class: 'seg' }, opts.map(([k, l]) => h('button', { class: v === k ? 'on' : '', onclick: () => fn(k) }, l)));
+  const out = h('div');
+  out.append(h('div', { class: 'card' },
+    h('div', { class: 'row-head' },
+      h('div', null, h('h2', null, `${M.label} ${C.cumulative ? 'cộng dồn' : 'theo ngày'} · tất cả ${periods.length} kỳ`),
+        h('p', { class: 'hint' }, 'Ngày thứ N của mọi kỳ xếp thẳng hàng. Rê chuột để xem giá trị của từng kỳ.')),
+      h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' },
+        h('select', { id: 'cmp-all-metric', onchange: e => { C.metric = e.target.value; render(); } },
+          Object.entries(METRICS).map(([k, v]) => { const o = h('option', { value: k }, v.label); if (k === C.metric) o.selected = true; return o; })),
+        segBtn(C.cumulative ? 'cum' : 'day', [['day', 'Theo ngày'], ['cum', 'Cộng dồn']], k => { C.cumulative = k === 'cum'; render(); }))),
+    h('div', { class: 'legend' },
+      h('span', null, h('i', { style: 'background:var(--s2);height:3px;width:16px' }), 'Kỳ đang xem: ' + cur.label),
+      past.length ? h('span', null, h('i', { style: 'height:3px;width:28px;background:linear-gradient(90deg, rgba(var(--heat),0.25), rgba(var(--heat),0.85))' }), `${past.length} kỳ khác (nhạt = cũ hơn)`) : null,
+      past.length > 1 ? h('span', null, h('i', { style: 'height:0;width:16px;border-top:2px dashed var(--text-2);background:none' }), 'Trung bình các kỳ khác') : null),
+    lineChart({ cats, series, fmt: M.fmt, full: M.full, height: 300 })));
+
+  // every period split by platform and shift
+  const dims = [['platform', 'Nền tảng'], ['shift', 'Ca']];
+  const colDefs = dims.flatMap(([dim]) => sortKeys(dim, [...new Set(list.map(DIMS[dim].key))]).map(k => ({ dim, k })));
+  const cells = periods.map(p => {
+    const pl = list.filter(inR(p.r));
+    return { p, tot: agg(pl)[C.metric], vals: colDefs.map(c => { const arr = pl.filter(s => DIMS[c.dim].key(s) === c.k); return arr.length ? agg(arr)[C.metric] : null; }) };
+  });
+  const colMax = colDefs.map((_, j) => Math.max(0, ...cells.map(c => c.vals[j] || 0)));
+  const tb = h('tbody');
+  for (const c of cells) tb.append(h('tr', { class: c.p.isCur ? 'sel' : '' },
+    h('td', null, c.p.label, c.p.isCur ? h('b', { style: 'color:var(--accent)' }, '  · đang xem') : null),
+    c.vals.map((v, j) => h('td', { style: v && colMax[j] ? `background:rgba(var(--heat),${(0.05 + 0.35 * v / colMax[j]).toFixed(3)})` : '' }, v == null ? '–' : M.fmt(v))),
+    h('td', null, h('b', null, M.fmt(c.tot)))));
+  out.append(h('div', { class: 'card' },
+    h('h2', null, `${M.label} của mọi kỳ theo nền tảng và ca`),
+    h('p', { class: 'hint' }, 'Màu đậm = cao nhất trong cột, để so từng nền tảng / ca qua các kỳ.'),
+    h('div', { class: 'tblwrap', style: 'max-height:420px;overflow:auto' }, h('table', null,
+      h('thead', null,
+        h('tr', null, h('th'), dims.map(([dim, l]) => h('th', { colspan: colDefs.filter(c => c.dim === dim).length, style: 'text-align:center' }, l)), h('th')),
+        h('tr', null, h('th', null, 'Kỳ'), colDefs.map(c => h('th', null, h('span', { class: 'pill' }, swatch(seriesColor(c.dim, c.k)), DIMS[c.dim].name(c.k)))), h('th', null, 'Tổng'))),
+      tb))));
+  return out;
+}
+
+/* line chart: series [{label, values[], color, width, opacity, dash, current}] sharing one x index */
+function lineChart({ cats, series, fmt, full, height = 280 }) {
+  const box = h('div', { class: 'chart' });
+  const draw = () => {
+    const W = Math.max(280, box.clientWidth || 800), H = height;
+    const m = { l: 56, r: 12, t: 12, b: 26 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const max = niceMax(Math.max(0, ...series.flatMap(s => s.values.filter(v => v != null))));
+    const n = cats.length;
+    const x = i => m.l + (n > 1 ? iw * i / (n - 1) : iw / 2);
+    const y = v => m.t + ih - (v / max) * ih;
+    const svg = sv('svg', { viewBox: `0 0 ${W} ${H}`, height: H, role: 'img' });
+    for (let i = 0; i <= 4; i++) {
+      const v = max * i / 4;
+      svg.append(sv('line', { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), stroke: i ? 'var(--grid)' : 'var(--axis)', 'stroke-width': 1 }));
+      svg.append(sv('text', { x: m.l - 8, y: y(v) + 4, 'text-anchor': 'end', class: 'ax' }, (fmt.axis || fmt)(v)));
+    }
+    const every = Math.ceil(n / Math.max(1, Math.floor(iw / 40)));
+    cats.forEach((c, i) => { if (i % every === 0 || i === n - 1) svg.append(sv('text', { x: x(i), y: H - 8, 'text-anchor': 'middle', class: 'ax' }, c.label)); });
+    // draw faint lines first so the viewed period sits on top
+    const order = series.slice().sort((a, b) => (a.current ? 1 : 0) - (b.current ? 1 : 0));
+    for (const s of order) {
+      let d = '', pen = false;
+      s.values.forEach((v, i) => { if (v == null) { pen = false; return; } d += (pen ? 'L' : 'M') + x(i).toFixed(1) + ',' + y(v).toFixed(1); pen = true; });
+      if (!d) continue;
+      const attrs = { d, fill: 'none', stroke: s.color, 'stroke-width': s.width, 'stroke-opacity': s.opacity, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' };
+      if (s.dash) attrs['stroke-dasharray'] = s.dash;
+      svg.append(sv('path', attrs));
+      if (s.current) {
+        let li = -1; s.values.forEach((v, i) => { if (v != null) li = i; });
+        if (li >= 0) svg.append(sv('circle', { cx: x(li), cy: y(s.values[li]), r: 4, fill: s.color, stroke: 'var(--surface)', 'stroke-width': 2 }));
+      }
+    }
+    const cross = sv('line', { y1: m.t, y2: m.t + ih, stroke: 'var(--axis)', 'stroke-width': 1, visibility: 'hidden' });
+    svg.append(cross);
+    const hit = sv('rect', { x: m.l, y: m.t, width: iw, height: ih, fill: 'transparent', tabindex: 0 });
+    const at = ev => {
+      const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) * W / r.width;
+      const i = Math.max(0, Math.min(n - 1, Math.round(n > 1 ? (px - m.l) / iw * (n - 1) : 0)));
+      cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('visibility', 'visible');
+      const rows = series.slice().reverse().filter(s => s.values[i] != null)
+        .map(s => ({ color: s.color, label: (s.current ? '● ' : '') + s.label, value: full(s.values[i]) }));
+      showTip(ev, cats[i].title, rows.length ? rows : [{ color: 'transparent', label: 'Không có dữ liệu', value: '' }]);
+    };
+    hit.addEventListener('pointermove', at);
+    hit.addEventListener('pointerenter', at);
+    hit.addEventListener('pointerleave', () => { cross.setAttribute('visibility', 'hidden'); hideTip(); });
+    svg.append(hit);
+    box.replaceChildren(svg);
+  };
+  box._draw = draw;
+  requestAnimationFrame(draw);
+  return box;
+}
+
+/* ---------- tab: hosts (live timetable × revenue) ---------- */
+function hostChip(k) {
+  return h('span', { style: k === HOST_NONE ? 'color:var(--text-2);font-style:italic' : '' }, hostName(k));
+}
+// One color per person, numbered within the brand on screen so neighbours never share a hue;
+// the palette is ordered so the first few people get the most distinct colors.
+const HOST_COLORS = ['var(--h1)', 'var(--h2)', 'var(--h3)', 'var(--h4)', 'var(--h5)', 'var(--h6)', 'var(--h7)', 'var(--h8)'];
+let HOST_ORDER = [];
+function hostColor(k) {
+  if (k === HOST_NONE) return 'var(--other)';
+  let i = HOST_ORDER.indexOf(k);
+  if (i < 0) i = [...HOSTS.keys()].sort((a, b) => hostName(a).localeCompare(hostName(b), 'vi')).indexOf(k);
+  return i < 0 ? 'var(--other)' : HOST_COLORS[i % HOST_COLORS.length];
+}
+// past the 8th person the colors repeat, so the repeat gets stripes to stay tellable apart
+function hostFill(k) {
+  const i = HOST_ORDER.indexOf(k);
+  const striped = k === HOST_NONE || i >= HOST_COLORS.length;
+  return `background-color:${hostColor(k)}` + (striped ? `;background-image:repeating-linear-gradient(135deg, rgba(255,255,255,.38) 0 3px, transparent 3px ${k === HOST_NONE ? 8 : 6}px)` : '');
+}
+function heatLevel(v, max) { return !v || v <= 0 || !max ? 0 : Math.min(4, Math.max(1, Math.ceil(v / max * 4))); }
+function heatBg(v, max) { const l = heatLevel(v, max); return `background:var(--lv${l});color:var(--lvfg${l})`; }
+function ghLegend(max, fmt) {
+  const steps = [0, 1, 2, 3, 4];
+  return h('span', { class: 'gh-legend', title: max ? steps.slice(1).map(l => `mức ${l}: ≤ ${fmt(max * l / 4)}`).join(' · ') : '' },
+    'Ít', steps.map(l => h('i', { style: `background:var(--lv${l})` })), 'Nhiều');
+}
+function renderHosts(list) {
+  const u = S.ui, HS = u.hosts;
+  const brands = revBrands();
+  if (!brands.length) return h('div', { class: 'card empty' },
+    h('div', { style: 'font-weight:600;color:var(--text);margin-bottom:6px' }, 'Chưa có doanh số theo brand'),
+    'Nhập file doanh số (vd Revenue2.xlsx): mỗi sheet là một brand, mỗi khối live có cột “Nhân sự” ngay bên trái “Thời gian bắt đầu”. Người live của mỗi phiên lấy đúng theo tên ghi ở cột đó.');
+  const brand = activeBrand();
+  list = list.filter(x => x.brand === brand);
+  // The whole tab works on one date range (it may span months, or be a single day), within the
+  // dates this brand has lives for. The month filter at the top does not apply here.
+  const liveDates = [...new Set(list.map(x => x.ts.slice(0, 10)))].sort();
+  const months = [...new Set(liveDates.map(d => d.slice(0, 7)))];
+  const minDate = liveDates[0], maxDate = liveDates[liveDates.length - 1];
+  const monthEnd = m => `${m}-${pad(new Date(+m.slice(0, 4), +m.slice(5, 7), 0).getDate())}`;
+  const clampD = d => d < minDate ? minDate : d > maxDate ? maxDate : d;
+  if (!HS.from || !HS.to || HS.from > maxDate || HS.to < minDate) {
+    // default: the latest month with lives
+    const m = months[months.length - 1];
+    HS.from = `${m}-01`; HS.to = monthEnd(m);
+  }
+  HS.from = clampD(HS.from); HS.to = clampD(HS.to < HS.from ? HS.from : HS.to);
+  if (HS.single) HS.to = HS.from;
+  const rFrom = HS.from, rTo = HS.to;
+  const inRange = date => date >= rFrom && date <= rTo;
+  const wholeMonth = rFrom.slice(8) === '01' && rFrom.slice(0, 7) === rTo.slice(0, 7) && rTo === clampD(monthEnd(rTo.slice(0, 7)));
+  const rangeLabel = rFrom === rTo ? `${WEEKDAYS[parseYmd(rFrom).getDay()]} ${dmy(rFrom)}`
+    : wholeMonth ? monthLabel(rFrom.slice(0, 7))
+    : rFrom.slice(0, 4) === rTo.slice(0, 4) ? `${dm(rFrom)} – ${dmy(rTo)}` : `${dmy(rFrom)} – ${dmy(rTo)}`;
+  list = list.filter(x => inRange(x.ts.slice(0, 10)));
+  // person filter: everyone tagged on this brand's lives, plus the untagged bucket
+  const brandLives = enriched().filter(x => x.brand === brand);
+  const peopleAll = [...new Set(brandLives.map(x => x.host).filter(k => k !== HOST_NONE))].sort((a, b) => hostName(a).localeCompare(hostName(b), 'vi'));
+  if (brandLives.some(x => x.host === HOST_NONE)) peopleAll.push(HOST_NONE);
+  // colors go to the people in this range, biggest sellers first, so the main ones never share a hue
+  HOST_ORDER = [...groupBy(list, x => x.host)].map(([k, a]) => [k, agg(a).revenue]).sort((a, b) => b[1] - a[1]).map(([k]) => k).filter(k => k !== HOST_NONE);
+  HS.people = (HS.people || []).filter(k => peopleAll.includes(k));
+  const picked = k => !HS.people.length || HS.people.includes(k);
+  const toggleP = k => { HS.people = HS.people.includes(k) ? HS.people.filter(x => x !== k) : HS.people.concat(k); render(); };
+  const peopleBar = h('div', { class: 'fgroup', style: 'margin-top:10px' }, h('span', { class: 'lbl' }, 'Người live'),
+    h('button', { class: 'chip person' + (HS.people.length ? '' : ' on'), 'aria-pressed': HS.people.length ? 'false' : 'true', onclick: () => { HS.people = []; render(); } }, 'Tất cả'),
+    peopleAll.map(k => h('button', { class: 'chip person' + (HS.people.includes(k) ? ' on' : ''), 'aria-pressed': HS.people.includes(k) ? 'true' : 'false', onclick: () => toggleP(k) }, hostName(k))));
+  const opt = (v, l, sel) => { const o = h('option', { value: v }, l); if (sel) o.selected = true; return o; };
+  const autoBrand = (() => { const b = HS.brand; HS.brand = ''; const a = activeBrand(); HS.brand = b; return a; })();
+  const brandSel = h('label', null, 'Brand', h('select', { id: 'host-brand', onchange: e => { HS.brand = e.target.value; render(); } },
+    opt('', `Tự động (${autoBrand})`, !HS.brand), brands.map(b => opt(b, b, HS.brand === b))));
+  const setRange = (a, b) => { HS.from = a; HS.to = b < a ? a : b; render(); };
+  const dateIn = (val, fn) => h('input', { type: 'date', value: val, min: minDate, max: maxDate, style: 'padding:4px 6px',
+    onchange: e => { if (e.target.value) fn(e.target.value); } });
+  const step = n => { const d = clampD(addDays(rFrom, n)); setRange(d, d); };
+  const dayBar = h('div', { class: 'fgroup', style: 'margin-top:8px' }, h('span', { class: 'lbl' }, 'Thời gian'),
+    months.map(m => h('button', { class: 'chip' + (!HS.single && rFrom === clampD(`${m}-01`) && rTo === clampD(monthEnd(m)) ? ' on' : ''),
+      onclick: () => { HS.single = false; setRange(clampD(`${m}-01`), clampD(monthEnd(m))); } }, monthLabel(m))),
+    h('button', { class: 'chip' + (HS.single ? ' on' : ''), 'aria-pressed': HS.single ? 'true' : 'false',
+      onclick: () => { HS.single = !HS.single; if (!HS.single) HS.to = clampD(monthEnd(rFrom.slice(0, 7))); render(); } }, 'Một ngày'),
+    HS.single
+      ? [h('button', { class: 'chip', title: 'Ngày trước', disabled: rFrom <= minDate ? 'disabled' : null, onclick: () => step(-1) }, '‹'),
+         dateIn(rFrom, v => setRange(v, v)),
+         h('button', { class: 'chip', title: 'Ngày sau', disabled: rFrom >= maxDate ? 'disabled' : null, onclick: () => step(1) }, '›')]
+      : [h('span', { class: 'lbl', style: 'margin-left:6px' }, 'từ'), dateIn(rFrom, v => setRange(v, v > rTo ? v : rTo)),
+         h('span', { class: 'lbl' }, 'đến'), dateIn(rTo, v => setRange(v < rFrom ? v : rFrom, v))],
+    h('span', { class: 'lbl' }, `· ${rangeLabel} · bấm tiêu đề ngày ở lịch bên dưới để xem riêng ngày đó`));
+  const hadLives = list.length;
+  list = list.filter(x => picked(x.host));
+  if (!list.length) {
+    const why = hadLives ? 'Người được chọn không có phiên live nào trong khoảng thời gian này.'
+      : `${brand} không có phiên live nào trong ${rangeLabel} theo bộ lọc nền tảng / ca hiện tại.`;
+    return h('div', null, h('div', { class: 'card' }, h('div', { class: 'pivot-ctl' }, brandSel), peopleBar, dayBar), h('div', { class: 'card empty' }, why));
+  }
+  const M = METRICS[HS.metric];
+
+  const byHost = groupBy(list, s => s.host);
+  const hostKeys = [...byHost.keys()].sort((a, b) => ((a === HOST_NONE) - (b === HOST_NONE)) || agg(byHost.get(b))[HS.metric] - agg(byHost.get(a))[HS.metric]);
+  const untagged = agg(list.filter(s => s.host === HOST_NONE));
+  const total = agg(list);
+
+  const out = h('div');
+  out.append(h('div', { class: 'card' },
+    h('h2', null, 'Ai live ca nào, doanh số bao nhiêu'),
+    h('p', { class: 'hint' }, `Người live của mỗi phiên lấy theo cột “Nhân sự” trong sheet doanh số ${brand} (không phân biệt hoa thường). Phiên chạy qua nhiều ca được chia như ở “Khung giờ ca”. Đang tính: ${rangeLabel}.`),
+    h('div', { class: 'pivot-ctl' },
+      brandSel,
+      h('label', null, 'Chỉ số', h('select', { id: 'host-metric', onchange: e => { HS.metric = e.target.value; render(); } },
+        Object.entries(METRICS).map(([k, v]) => opt(k, v.label, k === HS.metric)))),
+      h('label', null, 'Cột', h('select', { id: 'host-cols', onchange: e => { HS.cols = e.target.value; render(); } },
+        ['shift', 'platform', 'weekday', 'week', 'month', 'hour', 'date'].map(k => opt(k, DIMS[k].label, k === HS.cols)))),
+      h('label', { title: 'Ô chỉ hiện tên người live (lịch) hoặc màu nền (bảng); rê chuột (hoặc Tab) vào ô để xem toàn bộ chi tiết' },
+        h('input', { id: 'host-simple', type: 'checkbox', checked: HS.simple ? 'checked' : null, onchange: e => { HS.simple = e.target.checked; render(); } }),
+        'Gọn: rê chuột để xem chi tiết')),
+    peopleBar,
+    dayBar,
+    h('p', { class: 'hint', style: 'margin:6px 0 0' },
+      `${compact(total.revenue - untagged.revenue)} / ${compact(total.revenue)} doanh số có tên người live` +
+      (untagged.sessions ? ` · ${nf1.format(untagged.sessions)} phiên chưa gắn tên ở cột “Nhân sự”.` : '.'))));
+
+  // ---- heat map: host × chosen dimension
+  const dim = HS.cols;
+  const present = [...new Set(list.map(DIMS[dim].key))];
+  const colKeys = dim === 'shift'
+    ? shiftKeys(present)
+    : dim === 'platform' ? (u.platforms.length ? u.platforms : PLATFORMS.map(p => p.key)).filter(p => present.includes(p)) : sortKeys(dim, present);
+  const cell = new Map();
+  const cellArr = new Map();
+  for (const [k, arr] of groupBy(list, x => x.host + '|' + DIMS[dim].key(x))) { cell.set(k, agg(arr)); cellArr.set(k, arr); }
+  const max = Math.max(0, ...[...cell.values()].map(x => x[HS.metric] || 0));
+  const colTot = groupBy(list, DIMS[dim].key);
+  const tb = h('tbody');
+  for (const hk of hostKeys) {
+    const tr = h('tr', null, h('td', null, hostChip(hk)));
+    for (const ck of colKeys) {
+      const x = cell.get(hk + '|' + ck), v = x ? x[HS.metric] : null;
+      const td = selCell(h('td', { class: 'heat-cell', style: heatBg(v, max) },
+        h('div', { class: 'gh-box ' + (HS.simple ? 'sq' : 'mx') },
+          v == null || HS.simple ? null : h('div', null, M.fmt(v)),
+          v == null || HS.simple ? null : h('div', { style: 'font-size:11px;opacity:0.8' }, nf1.format(x.sessions) + ' phiên'))), cellArr.get(hk + '|' + ck));
+      if (x) {
+        const hostTot = agg(byHost.get(hk));
+        bindTip(td, () => ({ title: `${hostName(hk)} · ${DIMS[dim].label}: ${DIMS[dim].name(ck)}`, sections: [
+          { head: hostName(hk), rows: metricRows(x, HS.metric) },
+          { rows: [['Tỉ trọng DS của người này', hostTot.revenue ? nf1.format(x.revenue / hostTot.revenue * 100) + '%' : '–'], ['Tỉ trọng DS cả cột', (() => { const c = agg(colTot.get(ck) || []); return c.revenue ? nf1.format(x.revenue / c.revenue * 100) + '%' : '–'; })()]] },
+        ] }));
+      }
+      tr.append(td);
+    }
+    tr.append(selCell(h('td', null, h('b', null, M.fmt(agg(byHost.get(hk))[HS.metric]))), byHost.get(hk)));
+    tb.append(tr);
+  }
+  tb.append(h('tr', { class: 'total' }, h('td', null, 'Tổng'), colKeys.map(ck => selCell(h('td', null, M.fmt(agg(colTot.get(ck) || [])[HS.metric])), colTot.get(ck))), selCell(h('td', null, M.fmt(total[HS.metric])), list)));
+  out.append(h('div', { class: 'card' },
+    h('h2', null, `${M.label}: người live × ${DIMS[dim].label.toLowerCase()} · ${rangeLabel}`),
+    h('p', { class: 'hint' }, 'Kiểu GitHub: 5 mức màu, ô xám = không có. Rê chuột vào ô để xem đầy đủ chỉ số. Kéo một khung từ bất kỳ đâu qua các ô để xem tổng ở thanh dưới cùng (Ctrl/⌘ để thêm, Shift để mở rộng).'),
+    h('div', { style: 'display:flex;justify-content:flex-end' }, ghLegend(max, M.fmt)),
+    h('div', { class: 'tblwrap', 'data-selgroup': 'hosts-matrix', style: 'overflow-x:auto;overflow-y:hidden' }, h('table', { class: 'gh fixed', style: `width:${140 + colKeys.length * (HS.simple ? 49 : 103) + 96}px` },
+      // equal column widths so every cell box is the same size, whatever the totals row holds
+      h('colgroup', null, h('col', { style: 'width:140px' }), colKeys.map(() => h('col', { style: `width:${HS.simple ? 46 : 100}px` })), h('col', { style: 'width:90px' })),
+      h('thead', null, h('tr', null, h('th', null, 'Người live'), colKeys.map(ck => h('th', { class: 'gh-col' }, DIMS[dim].name(ck), dim === 'shift' && shiftHours(ck) ? [h('br'), h('span', { style: 'font-weight:400;color:var(--muted)' }, shiftHours(ck))] : null)), h('th', null, 'Tổng'))), tb))));
+
+  // ---- timetable: "Theo giờ" (hourly calendar, the default) or "Theo ca" (the legacy shift grid)
+  const byShift = HS.ttMode === 'shift';
+  const perHour = M.add && HS.metric !== 'hours'; // hourly mode: heat per hour on air for metrics that add up
+  const plats = (u.platforms.length ? PLATFORMS.filter(p => u.platforms.includes(p.key)) : PLATFORMS).filter(pl => list.some(x => x.p === pl.key));
+  const dates = [];
+  for (let d = rFrom; d <= rTo; d = addDays(d, 1)) dates.push(d);
+  const { tables, legendHosts, tmax, legendFmt } = byShift ? (() => {
+      // legacy grid: shift × platform rows, one column per date, who sold what in each shift. A live crossing a
+      // shift boundary is split by the share of its time in each shift (15:01–18:01 → 179/180 to Ca 3, 1/180 to Ca 4).
+      const tsplit = Object.assign({}, S.split, { mode: 'time' });
+      const tlist = [...new Set(list.map(x => x.id))].flatMap(id => sessionPieces(S.sessions[id], id, tsplit))
+        .filter(x => (!u.shifts.length || u.shifts.includes(x.shift)) && picked(x.host));
+    const pv = new Map();
+    for (const [k, arr] of groupBy(tlist, x => x.ts.slice(0, 10) + '|' + x.p + '|' + x.shift)) pv.set(k, { arr, all: agg(arr), byHost: new Map([...groupBy(arr, x => x.host)].map(([hk, a]) => [hk, agg(a)])) });
+    const tmax = Math.max(0, ...[...pv.values()].map(x => x.all[HS.metric] || 0));
+    const shiftsUsed = shiftOrder().filter(sh => (!u.shifts.length || u.shifts.includes(sh)) && (sh !== OUT_SHIFT || [...pv.keys()].some(k => k.endsWith('|' + sh))));
+    const head = h('tr', null, h('th', { style: 'position:sticky;left:0;z-index:2;background:var(--surface);box-shadow:-3px 0 0 var(--surface), 4px 0 0 var(--surface)' }, 'Ca'),
+      dates.map((date, i) => { const dt = parseYmd(date); const only = rFrom === rTo;
+        // the month is written on the first column and on every 1st, so a range across months reads clearly
+        const showMonth = i === 0 || date.endsWith('-01');
+        return h('th', { class: 'gh-col', 'data-date': date, title: only ? 'Quay lại khoảng trước' : `Chỉ xem ngày ${dmy(date)}`,
+          style: 'cursor:pointer;' + (dt.getDay() === 0 ? 'color:var(--text)' : '') + (only ? ';box-shadow:inset 0 -2px 0 var(--accent)' : '') + (showMonth && i ? ';border-left:2px solid var(--axis)' : '') },
+          WEEKDAYS[dt.getDay()], h('br'), showMonth ? `${+date.slice(8)}/${+date.slice(5, 7)}` : String(+date.slice(8))); }));
+    // one timetable per platform; merged into a single grid only when the flag is on
+    const groups = HS.mergePlat ? [plats] : plats.map(pl => [pl]);
+    const shareKey = M.add ? HS.metric : 'revenue'; // a person's share of a cell: the chosen metric when it adds up, else revenue
+    const tables = [];
+    const legendHosts = new Set();
+    for (const group of groups) {
+      const ttb = h('tbody');
+      for (const sh of shiftsUsed) for (const pl of group) {
+        if (sh === OUT_SHIFT && ![...pv.keys()].some(k => k.endsWith('|' + pl.key + '|' + sh))) continue;
+        const tr = h('tr', null, h('td', { style: 'position:sticky;left:0;background:var(--surface);z-index:1;box-shadow:-3px 0 0 var(--surface), 4px 0 0 var(--surface)' },
+          h('span', { class: 'pill' }, swatch(shiftColor(sh)), sh), shiftHours(sh) ? h('div', { style: 'font-size:11px;color:var(--muted);white-space:nowrap' }, shiftHours(sh)) : null, group.length > 1 ? h('div', { style: 'font-size:11px;color:var(--text-2)' }, pl.label) : null));
+        dates.forEach((date, di) => {
+          const val = pv.get(`${date}|${pl.key}|${sh}`);
+          const v = val ? val.all[HS.metric] : null;
+          const dt = parseYmd(date);
+          const box = h('div', { class: 'gh-box tt' + (HS.simple ? '' : ' full') });
+          const people = val ? [...val.byHost].sort((a, b) => ((a[0] === HOST_NONE) - (b[0] === HOST_NONE)) || (b[1][shareKey] || 0) - (a[1][shareKey] || 0)) : [];
+          const shareTot = people.reduce((a, [, hv]) => a + Math.max(0, hv[shareKey] || 0), 0);
+          const pctOf = hv => shareTot > 0 ? nf0.format(Math.max(0, hv[shareKey] || 0) / shareTot * 100) + '%' : '';
+          for (const [hk, hv] of people) {
+            legendHosts.add(hk);
+            const nm = hk === HOST_NONE ? 'chưa gắn tên' : hostName(hk);
+            if (HS.simple) box.append(h('div', { style: 'font-size:10.5px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%' + (hk === HOST_NONE ? ';font-style:italic;opacity:.8' : '') }, nm));
+            else {
+              box.append(h('div', { style: 'font-size:11px;text-align:left' + (hk === HOST_NONE ? ';font-style:italic;opacity:.8' : '') }, nm));
+              box.append(h('div', { style: 'font-size:12px;text-align:left;font-weight:600' }, M.fmt(hv[HS.metric])));
+            }
+          }
+          const sections = people.map(([hk, hv]) => ({ head: hostName(hk), note: people.length > 1 ? `Tỉ trọng ${(M.add ? M : METRICS.revenue).label.toLowerCase()} trong ca: ${pctOf(hv)}` : '', rows: metricRows(hv, HS.metric) }));
+          if (people.length > 1) sections.push({ head: 'Tổng ca', rows: metricRows(val.all, HS.metric).slice(0, 6) });
+          const cellBox = h('div', { class: 'ttc', style: `--i:${di + ttb.children.length * 2}` }, box,
+            h('div', { class: 'lay-rev' }, v == null ? null : M.fmt(v)),
+            people.length ? h('div', { class: 'lay-host' }, people.map(([hk, hv]) => {
+              // width follows each person's share of the shift; someone with no sales keeps a sliver
+              const multi = people.length > 1 && shareTot > 0;
+              const grow = multi ? Math.max(Math.max(0, hv[shareKey] || 0) / shareTot, 0.08) : 1;
+              return h('div', { class: hk === HOST_NONE ? 'off' : '', style: `${hostFill(hk)};--hc:${hostColor(hk)};flex:${grow.toFixed(3)} 1 0` },
+                h('span', { class: 'nm' }, hk === HOST_NONE ? 'chưa gắn tên' : hostName(hk)), multi ? h('span', { class: 'pc' }, pctOf(hv)) : null);
+            })) : null);
+          const td = selCell(h('td', { class: 'heat-cell', style: heatBg(v, tmax) + ';vertical-align:top;text-align:left' }, cellBox), val ? val.arr : []);
+          if (sections.length) bindTip(td, () => ({ title: `${WEEKDAYS[dt.getDay()]} ${dmy(date)} · ${sh} · ${pl.label}`, sections }));
+          tr.append(td);
+        });
+        ttb.append(tr);
+      }
+      // headings stay pinned on the left while the shared area scrolls sideways
+      tables.push(
+        h('h3', { style: `position:sticky;left:0;display:inline-flex;gap:8px;align-items:center;font-size:14px;margin:${tables.length ? '18px' : '4px'} 0 2px` },
+          group.length > 1 ? group.map(p => p.label).join(' + ') : h('span', { class: 'pill' }, swatch(group[0].color), group[0].label)),
+        h('table', { class: 'gh', style: 'font-size:12px;width:auto' }, h('thead', null, head.cloneNode(true)), ttb));
+    }
+    return { tables, legendHosts, tmax, legendFmt: M.fmt };
+  })() : (() => {
+    const groups = HS.mergePlat ? [plats] : plats.map(pl => [pl]); // one calendar per platform, or all in one
+    const shareKey = M.add ? HS.metric : 'revenue'; // a person's share: the chosen metric when it adds up, else revenue
+    // heat per hour on air for metrics that add up (hours itself and rates are taken as they are)
+    const heatOf = x => perHour ? (x.hours > 0 ? x[HS.metric] / x.hours : 0) : x[HS.metric];
+    const heatFmt = v => perHour ? M.fmt(v) + '/h' : M.fmt(v);
+    const clockTxt = m => `${pad(Math.floor(m / 60) % 24)}:${pad(Math.round(m % 60) % 60)}`;
+    const bands = S.shifts.map(sh => { const a = toMin(sh.from); let b = toMin(sh.to); if (b <= a) b += 1440; return { name: sh.name, a, b }; })
+      .filter(r => !u.shifts.length || u.shifts.includes(r.name));
+    const CUT = 5 * 60; // a live starting before 05:00 is the night of the day before (Ca 4 runs past midnight)
+    const pph = HS.simple ? 30 : 44, ppm = pph / 60, colW = HS.simple ? 84 : 128;
+    // every live once, drawn on its day's column
+    const lives = [];
+    for (const [id, pieces] of groupBy(list, x => x.id)) {
+      const s0 = S.sessions[id], p0 = pieces[0];
+      let date = p0.ts.slice(0, 10), start = s0.H * 60 + s0.M;
+      if (start < CUT && dates.includes(addDays(date, -1))) { date = addDays(date, -1); start += 1440; }
+      lives.push({ id, host: p0.host, p: p0.p, date, start, end: start + s0.dur, pieces, val: pieces.reduce((t, x) => t + Math.max(0, x[shareKey] || 0), 0) });
+    }
+    const lo = Math.floor(Math.min(...bands.map(b => b.a), ...lives.map(x => x.start)) / 60) * 60;
+    const hi = Math.ceil(Math.max(...bands.map(b => b.b), ...lives.map(x => x.end)) / 60) * 60;
+    const H = (hi - lo) * ppm;
+    const legendHosts = new Set(lives.map(x => x.host));
+    const pillSpecs = []; // built first, drawn once the heat scale over all of them is known
+    const tables = [];
+    for (const group of groups) {
+      const inGroup = x => group.some(pl => pl.key === x.p);
+      // axis: hour ticks and the shift markers (reference only)
+      const axis = h('div', { class: 'cal-axis' }, h('div', { class: 'cal-head' }, 'Giờ'),
+        h('div', { class: 'cal-body', style: `height:${H}px` },
+          Array.from({ length: (hi - lo) / 60 + 1 }, (_, i) => h('span', { class: 'cal-tick', style: `top:${i * pph}px` }, clockTxt(lo + i * 60))),
+          bands.map(b => h('div', { class: 'cal-mark', style: `top:${(b.a - lo) * ppm}px;height:${(b.b - b.a) * ppm}px;border-color:${shiftColor(b.name)}` },
+            h('b', null, b.name), h('small', null, shiftHours(b.name))))));
+      const cols = dates.map((date, di) => {
+        const dt = parseYmd(date), only = rFrom === rTo, showMonth = di === 0 || date.endsWith('-01');
+        const head = h('div', { class: 'cal-head', 'data-date': date, title: only ? 'Quay lại khoảng trước' : `Chỉ xem ngày ${dmy(date)}`,
+          style: (dt.getDay() === 0 ? 'color:var(--text);font-weight:600' : '') + (only ? ';box-shadow:inset 0 -2px 0 var(--accent)' : '') },
+          WEEKDAYS[dt.getDay()], h('br'), showMonth ? `${+date.slice(8)}/${+date.slice(5, 7)}` : String(+date.slice(8)));
+        const dayLives = lives.filter(x => x.date === date && inGroup(x));
+        const body = h('div', { class: 'cal-body', style: `height:${H}px;background-size:100% ${pph}px` },
+          // shift starts only as reference lines across the day
+          bands.map(b => h('div', { class: 'cal-ref', style: `top:${(b.a - lo) * ppm}px;border-color:${shiftColor(b.name)}` })));
+        // one person's lives that overlap in time (restarts, a second stream, both platforms) become one pill
+        const merged = [];
+        for (const x of dayLives.sort((p, q) => String(p.host).localeCompare(String(q.host)) || p.start - q.start)) {
+          const cur = merged[merged.length - 1];
+          if (cur && cur.host === x.host && x.start < cur.end) {
+            cur.end = Math.max(cur.end, x.end); cur.val += x.val; cur.ps.add(x.p); cur.parts.push(x); cur.pieces = cur.pieces.concat(x.pieces);
+          } else merged.push({ ...x, ps: new Set([x.p]), parts: [x] });
+        }
+        // lanes: pills that overlap in time sit side by side, sized by their share; others share a lane
+        merged.sort((p, q) => p.start - q.start || q.end - p.end);
+        let cluster = [], reach = -Infinity;
+        const flush = () => {
+          const lanes = [];
+          for (const x of cluster) {
+            let lane = lanes.find(l => l.end <= x.start);
+            if (!lane) lanes.push(lane = { end: -Infinity, lives: [] });
+            lane.lives.push(x); lane.end = x.end;
+          }
+          const tot = cluster.reduce((t, x) => t + x.val, 0);
+          const ws = lanes.map(l => lanes.length > 1 && tot > 0 ? Math.max(Math.max(...l.lives.map(x => x.val)) / tot, 0.18) : 1);
+          const wsum = ws.reduce((t, x) => t + x, 0);
+          let left = 0;
+          lanes.forEach((l, li) => {
+            for (const x of l.lives) {
+              const with_ = cluster.filter(y => y.start < x.end && y.end > x.start);
+              const st = with_.reduce((t, y) => t + y.val, 0);
+              const all = agg(x.pieces);
+              pillSpecs.push({ x, all, heat: heatOf(all), body, date, di, group, lp: left / wsum * 100, wp: ws[li] / wsum * 100,
+                pct: with_.length > 1 && st > 0 ? nf0.format(x.val / st * 100) + '%' : '' });
+            }
+            left += ws[li];
+          });
+          cluster = [];
+        };
+        for (const x of merged) { if (cluster.length && x.start >= reach) flush(); cluster.push(x); reach = Math.max(reach, x.end); }
+        if (cluster.length) flush();
+        return h('div', { class: 'cal-col', style: `width:${colW}px` + (showMonth && di ? ';border-left:2px solid var(--axis);padding-left:3px' : '') }, head, body);
+      });
+      tables.push(
+        h('h3', { style: `position:sticky;left:0;display:inline-flex;gap:8px;align-items:center;font-size:14px;margin:${tables.length ? '18px' : '4px'} 0 2px` },
+          group.length > 1 ? group.map(p => p.label).join(' + ') : h('span', { class: 'pill' }, swatch(group[0].color), group[0].label)),
+        h('div', { class: 'cal' }, axis, cols));
+    }
+    // the pills: heat fill (5 levels over all pills in view) + the person's color, the metric written on it;
+    // each pill is selectable (drag across pills to add them up) and has its own tooltip
+    // scale tops out at the 90th percentile: a few-minute live with one big order has a huge per-hour figure
+    // and would otherwise flatten every other pill into the lightest level; anything above is simply darkest
+    const heats = pillSpecs.map(s => s.heat || 0).filter(v => v > 0).sort((p, q) => p - q);
+    const tmax = heats.length ? heats[Math.min(heats.length - 1, Math.floor(heats.length * 0.9))] : 0;
+    for (const { x, all, heat, body, date, di, group, lp, wp, pct } of pillSpecs) {
+      const lvl = heatLevel(heat, tmax), hgt = Math.max(16, (x.end - x.start) * ppm - 1);
+      const pc = hostColor(x.host), pimg = (hostFill(x.host).match(/background-image:([^;]+)/) || [])[1] || 'none';
+      const name = x.host === HOST_NONE ? 'chưa gắn tên' : hostName(x.host);
+      const pill = h('div', { class: 'cal-live' + (x.host === HOST_NONE ? ' off' : '') + (hgt < 34 ? ' short' : '') + (hgt < 20 ? ' tiny' : ''),
+        style: `top:${(x.start - lo) * ppm}px;height:${hgt}px;--lp:${lp.toFixed(2)};--wp:${wp.toFixed(2)};--i:${di};` +
+          `--hb:var(--lv${lvl});--hf:var(--lvfg${lvl});--pc:${pc};--pimg:${pimg}` },
+        h('span', { class: 'nm' }, name),
+        h('span', { class: 'mv' }, M.fmt(all[HS.metric])),
+        h('span', { class: 'tm' }, `${clockTxt(x.start)}–${clockTxt(x.end)}` + (x.parts.length > 1 ? ` · ${x.parts.length} live` : '') + (group.length > 1 ? ' · ' + [...x.ps].map(platLabel).join('+') : '')),
+        pct ? h('span', { class: 'pc' }, pct) : null);
+      const el = selCell(pill, x.pieces);
+      bindTip(el, () => ({ title: `${WEEKDAYS[parseYmd(date).getDay()]} ${dmy(date)} · ${name}`, sections: [
+        { head: `${clockTxt(x.start)}–${clockTxt(x.end)}`, note: x.parts.map(p => `${clockTxt(p.start)}–${clockTxt(p.end)} ${platLabel(p.p)}`).join(', ') +
+          (pct ? ` · ${pct} ${(M.add ? M : METRICS.revenue).label.toLowerCase()} trong lúc trùng giờ` : ''), rows: metricRows(all, HS.metric) },
+        perHour ? { rows: [[`${M.label} / giờ live (độ đậm)`, heatFmt(heat)]] } : null].filter(Boolean) }));
+      body.append(el);
+    }
+    return { tables, legendHosts, tmax, legendFmt: heatFmt };
+  })();
+  if (!['rev', 'host', 'both'].includes(HS.layer)) HS.layer = 'both';
+  const LAYERS = [['rev', 'Doanh số'], ['host', 'Người live'], ['both', 'Cả hai']];
+  // flip the layer in place (no re-render) so the cells animate between layers
+  const setLayer = (btn, layer) => {
+    HS.layer = layer; saveUI();
+    const card = btn.closest('.card');
+    card.dataset.layer = layer;
+    card.querySelectorAll('[data-layer-opt]').forEach(b => { const on = b.dataset.layerOpt === layer; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); });
+  };
+  const layerSeg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Lớp hiển thị' },
+    LAYERS.map(([k, l]) => h('button', { 'data-layer-opt': k, class: HS.layer === k ? 'on' : '', 'aria-pressed': HS.layer === k ? 'true' : 'false', onclick: e => setLayer(e.currentTarget, k) }, l)));
+  const hostLeg = h('div', { class: 'tt-hostleg' },
+    [...legendHosts].sort((a, b) => ((a === HOST_NONE) - (b === HOST_NONE)) || hostName(a).localeCompare(hostName(b), 'vi'))
+      .map(k => h('span', null, h('i', { style: hostFill(k) }), hostName(k))));
+  const modeSeg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Cách xem lịch' },
+    [['hour', 'Theo giờ'], ['shift', 'Theo ca']].map(([k, l]) => h('button', { class: (byShift ? 'shift' : 'hour') === k ? 'on' : '', 'aria-pressed': (byShift ? 'shift' : 'hour') === k ? 'true' : 'false',
+      title: k === 'hour' ? 'Mỗi phiên live mang màu và chỉ số của nó; ca chỉ là mốc' : 'Mỗi ca mang màu và tổng chỉ số; phiên live là người live trong ca',
+      onclick: () => { HS.ttMode = k; saveUI(); render(); } }, l)));
+  out.append(h('div', { class: 'card ' + (byShift ? 'tt-shift' : 'tt-hour'), 'data-layer': HS.layer },
+    h('div', { class: 'row-head' },
+      h('div', null, h('h2', null, `Lịch live ${brand} × ${M.label.toLowerCase()} · ${rangeLabel}`),
+        h('p', { class: 'hint' }, byShift
+          ? `Theo ca: mỗi ô là một ca trong một ngày: ai đã live (theo cột “Nhân sự”) và ${M.label.toLowerCase()} họ làm ra trong ca đó; ô càng xanh đậm, ${M.label.toLowerCase()} càng cao. Phiên chạy qua ranh giới ca được chia cho từng ca theo tỉ lệ thời gian nằm trong ca. Nhiều người trong một ca thì khối màu chia theo tỉ trọng. Rê chuột vào ô để xem chi tiết, kéo qua nhiều ô để cộng tổng.`
+          : `Theo giờ: mỗi cột là một ngày, mỗi phiên live là một khối từ giờ bắt đầu đến giờ kết thúc (theo cột “Nhân sự”), ghi ${M.label.toLowerCase()} của phiên. ${perHour ? `Màu càng đậm, ${M.label.toLowerCase()} mỗi giờ live càng cao.` : `Màu càng đậm, ${M.label.toLowerCase()} càng cao.`} Ca chỉ là mốc tham chiếu. Rê chuột vào khối để xem chi tiết, kéo qua nhiều khối để cộng tổng.`)),
+      h('div', { style: 'display:flex;gap:12px;align-items:center;flex-wrap:wrap' },
+        modeSeg,
+        layerSeg,
+        plats.length > 1 ? h('label', { style: 'display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--text-2)' },
+          h('input', { id: 'host-merge', type: 'checkbox', checked: HS.mergePlat ? 'checked' : null, onchange: e => { HS.mergePlat = e.target.checked; render(); } }),
+          'Gộp các nền tảng vào 1 lịch') : null,
+        ghLegend(tmax, legendFmt))),
+    hostLeg,
+    // one scroll area for all platforms, so a single scroll bar moves the timetables together
+    h('div', { class: 'cal-wrap', 'data-selgroup': 'timetable',
+      // a day header shows just that day; clicking it again goes back to the range before
+      onclick: e => {
+        const th = e.target.closest('[data-date]'); if (!th) return;
+        const d = th.dataset.date;
+        if (rFrom === rTo && HS.back) { const [a, b] = HS.back; HS.back = null; HS.single = false; setRange(a, b); }
+        else { HS.back = [rFrom, rTo]; HS.single = true; setRange(d, d); }
+      } }, tables)));
+
+  // ---- per-host summary
+  const stb = h('tbody');
+  for (const hk of hostKeys) {
+    const x = agg(byHost.get(hk));
+    stb.append(h('tr', null, h('td', null, hostChip(hk)),
+      h('td', null, nf1.format(x.sessions)), h('td', null, hoursTxt(x.hours, true)),
+      h('td', null, money(x.revenue)), h('td', null, total.revenue ? nf1.format(x.revenue / total.revenue * 100) + '%' : '–'),
+      h('td', null, money(x.revph)), h('td', null, nf0.format(x.orders)), h('td', null, money(x.aov))));
+  }
+  out.append(h('div', { class: 'card' },
+    h('h2', null, `Tổng hợp theo người live · ${rangeLabel}`),
+    h('p', { class: 'hint' }, 'Theo cột “Nhân sự” trong sheet doanh số, trong khoảng thời gian đã chọn và theo bộ lọc nền tảng / ca ở trên. Giờ live: một người live nhiều nền tảng trong cùng một ca chỉ tính nền tảng có nhiều giờ nhất.'),
+    h('div', { class: 'tblwrap' }, h('table', null,
+      h('thead', null, h('tr', null, ['Người live', 'Phiên', 'Giờ live', 'Doanh số', '% DS', 'DS / giờ', 'Đơn', 'Giá trị đơn TB'].map(x => h('th', null, x)))), stb))));
+  return out;
+}
+
+const SEL = { group: null, start: null, anchor: null, base: new Set(), cells: new Set(), dragging: false, moved: false };
+function selCell(td, pieces) { td._pieces = pieces || []; td.dataset.sel = '1'; return td; }
+// everything the dragged box touches (cells, shift cells or live pills), within one group
+function itemsInBox(group, a, b) {
+  const x1 = Math.min(a.x, b.x), x2 = Math.max(a.x, b.x), y1 = Math.min(a.y, b.y), y2 = Math.max(a.y, b.y);
+  return [...group.querySelectorAll('[data-sel]')].filter(el => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.right >= x1 && r.left <= x2 && r.bottom >= y1 && r.top <= y2;
+  });
+}
+function paintSel() {
+  document.querySelectorAll('.sel-cell').forEach(td => { if (!SEL.cells.has(td)) td.classList.remove('sel-cell'); });
+  SEL.cells.forEach(td => td.classList.add('sel-cell'));
+  const bar = document.getElementById('selbar');
+  if (!SEL.cells.size) { bar.hidden = true; return; }
+  const pieces = new Set();
+  SEL.cells.forEach(td => (td._pieces || []).forEach(x => pieces.add(x)));
+  const x = agg([...pieces]);
+  const item = (l, v) => h('span', null, l + ': ', h('b', null, v));
+  bar.replaceChildren(
+    item('Đã chọn', nf0.format(SEL.cells.size) + ' ô'),
+    item('Doanh số', money(x.revenue)), item('Đơn', nf0.format(x.orders)), item('Phiên', nf1.format(x.sessions)),
+    item('Giờ live', hoursTxt(x.hours)), item('DS / giờ', money(x.revph)), item('Giá trị đơn TB', money(x.aov)),
+    h('button', { onclick: clearSel, title: 'Bỏ chọn (Esc)' }, 'Bỏ chọn ✕'));
+  bar.hidden = false;
+}
+const selBox = document.createElement('div');
+selBox.id = 'selbox'; selBox.hidden = true;
+document.body.append(selBox);
+function clearSel() { SEL.cells = new Set(); SEL.base = new Set(); SEL.start = SEL.anchor = null; SEL.group = null; SEL.dragging = false; selBox.hidden = true; paintSel(); }
+// a click selects the item under the pointer; a drag selects everything its box touches
+function updateSel(pt, target) {
+  if (SEL.moved) {
+    const x1 = Math.min(SEL.start.x, pt.x), y1 = Math.min(SEL.start.y, pt.y);
+    Object.assign(selBox.style, { left: x1 + 'px', top: y1 + 'px', width: Math.abs(pt.x - SEL.start.x) + 'px', height: Math.abs(pt.y - SEL.start.y) + 'px' });
+    selBox.hidden = false;
+    SEL.cells = new Set([...SEL.base, ...itemsInBox(SEL.group, SEL.start, pt)]);
+  } else {
+    const hit = target && target.closest('[data-sel]');
+    SEL.cells = new Set(SEL.base);
+    if (hit && SEL.group.contains(hit)) { if (SEL.toggle && SEL.base.has(hit)) SEL.cells.delete(hit); else SEL.cells.add(hit); }
+  }
+  paintSel();
+}
+/* Free selection like a desktop: press anywhere in a table or calendar and drag a box (it can start on
+   empty space); everything the box touches is selected and its true totals (distinct sessions, revenue
+   per hour…) show in the bar. Ctrl/⌘ adds to or removes from the selection, Shift extends from the last start. */
+document.addEventListener('pointerdown', ev => {
+  if (ev.button !== 0) return;
+  const t = ev.target;
+  const group = t.closest && t.closest('[data-selgroup]');
+  if (!group || t.closest('[data-date], button, input, select, a, label')) { if (!group && !t.closest('#selbar')) clearSel(); return; }
+  ev.preventDefault();
+  hideTip();
+  if (SEL.group !== group) { SEL.cells = new Set(); SEL.base = new Set(); SEL.anchor = null; SEL.group = group; }
+  const pt = { x: ev.clientX, y: ev.clientY };
+  SEL.toggle = ev.ctrlKey || ev.metaKey;
+  if (ev.shiftKey && SEL.anchor) { SEL.start = SEL.anchor; SEL.moved = true; }      // extend: box from the last start
+  else { SEL.base = SEL.toggle ? new Set(SEL.cells) : new Set(); SEL.start = SEL.anchor = pt; SEL.moved = false; }
+  SEL.dragging = true;
+  updateSel(pt, t);
+});
+document.addEventListener('pointermove', ev => {
+  if (!SEL.dragging) return;
+  const pt = { x: ev.clientX, y: ev.clientY };
+  if (!SEL.moved && Math.hypot(pt.x - SEL.start.x, pt.y - SEL.start.y) < 5) return; // a click, not a drag yet
+  SEL.moved = true;
+  updateSel(pt);
+});
+document.addEventListener('pointerup', () => { SEL.dragging = false; selBox.hidden = true; });
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && SEL.cells.size) clearSel(); });
+
+/* ---------- main render ---------- */
+function render() {
+  saveUI();
+  clearSel();
+  const all = enriched();
+  const app = document.getElementById('app');
+  const status = document.getElementById('status');
+  document.querySelector('#drop .hint').style.display = all.length ? 'none' : '';
+  if (!all.length) {
+    status.textContent = 'Chưa có dữ liệu — hãy nhập file Excel';
+    app.replaceChildren(h('div', { class: 'empty' },
+      h('div', { style: 'font-weight:600;color:var(--text);margin-bottom:6px' }, 'Chưa có dữ liệu livestream'),
+      'Nhập file DATA.xlsx để xem: lịch sử doanh số theo tháng, so sánh tuần này với tuần trước, so sánh cùng kỳ tháng trước, phân tích theo nền tảng / ca / ngày, và danh sách từng phiên live.'));
+    return;
+  }
+  const months = allMonths(all);
+  status.textContent = `${nf0.format(S.sessions.length)} phiên · ${months.length} tháng (${monthLabel(months[0])} → ${monthLabel(months[months.length - 1])}) · lưu trên trình duyệt này`;
+  const list = filtered();
+  const tabs = [['history', 'Lịch sử doanh thu tháng'], ['compare', 'So sánh kỳ'], ['hosts', 'Người live'], ['pivot', 'Phân tích nhóm'], ['sessions', 'Phiên live']];
+  let body;
+  try {
+    body = S.ui.tab === 'hosts' ? renderHosts(filtered(true, true))
+      : !list.length && S.ui.tab !== 'compare' ? h('div', { class: 'empty' }, 'Không có phiên nào khớp bộ lọc.')
+      : S.ui.tab === 'compare' ? renderCompare() : S.ui.tab === 'pivot' ? renderPivot(list) : S.ui.tab === 'sessions' ? renderSessions(list) : renderHistory(list);
+  } catch (err) {
+    // a broken tab must say so instead of leaving the page blank
+    console.error(err);
+    body = h('div', { class: 'card empty' }, h('div', { style: 'font-weight:600;color:var(--bad);margin-bottom:6px' }, 'Lỗi khi vẽ tab này'), String(err && err.message || err));
+  }
+  app.replaceChildren(
+    renderFilters(all),
+    h('div', { class: 'tabs', role: 'tablist' }, tabs.map(([k, l]) => h('button', { class: 'tab' + (S.ui.tab === k ? ' on' : ''), role: 'tab', onclick: () => { S.ui.tab = k; render(); } }, l))),
+    body);
+}
+
+/* ---------- actions ---------- */
+const fileInput = document.getElementById('file');
+document.getElementById('btnImport').onclick = () => fileInput.click();
+fileInput.onchange = () => { importFiles([...fileInput.files]); fileInput.value = ''; };
+const drop = document.getElementById('drop');
+['dragenter', 'dragover'].forEach(e => addEventListener(e, ev => { ev.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(e => addEventListener(e, ev => { ev.preventDefault(); if (e === 'drop' || !ev.relatedTarget) drop.classList.remove('over'); }));
+addEventListener('drop', ev => { if (ev.dataTransfer.files.length) importFiles([...ev.dataTransfer.files]); });
+
+/* Export / backup: shown in a panel so it also works where downloads are blocked */
+const dataModal = document.getElementById('dataModal'), dataText = document.getElementById('dataText'), dataLog = document.getElementById('dataLog');
+let dataFile = null;
+function openData(title, hint, text, file, restore) {
+  document.getElementById('dataTitle').textContent = title;
+  document.getElementById('dataHint').textContent = hint;
+  document.getElementById('dataRestore').hidden = !restore;
+  dataText.value = text; dataFile = file; dataLog.textContent = '';
+  dataModal.classList.add('open');
+}
+document.getElementById('dataCopy').onclick = () => {
+  const done = () => dataLog.textContent = 'Đã sao chép vào clipboard.';
+  const fallback = () => { dataText.focus(); dataText.select(); dataLog.textContent = 'Đã chọn toàn bộ nội dung — nhấn Ctrl/Cmd + C để sao chép.'; };
+  try { navigator.clipboard.writeText(dataText.value).then(done, fallback); } catch (e) { fallback(); }
+};
+document.getElementById('dataDownload').onclick = () => {
+  try {
+    const a = h('a', { href: URL.createObjectURL(new Blob([dataFile.bom ? '﻿' + dataText.value : dataText.value], { type: dataFile.type })), download: dataFile.name });
+    document.body.append(a); a.click(); a.remove();
+    dataLog.textContent = 'Nếu file không tải về, hãy dùng “Sao chép”.';
+  } catch (e) { dataLog.textContent = 'Không tải được file ở đây — hãy dùng “Sao chép”.'; }
+};
+document.getElementById('dataRestore').onclick = () => {
+  try {
+    const data = JSON.parse(dataText.value);
+    const arr = Array.isArray(data) ? data : data.sessions;
+    if (!Array.isArray(arr)) throw new Error();
+    const r = mergeSessions(arr.filter(x => x && x.ts && x.p));
+    dataLog.textContent = `Đã khôi phục ${r.added} phiên.`;
+    render();
+  } catch (e) { dataLog.textContent = 'Nội dung không phải bản sao lưu JSON hợp lệ. Hãy dán toàn bộ nội dung đã sao chép từ “Sao lưu”.'; }
+};
+document.getElementById('dataClose').onclick = () => dataModal.classList.remove('open');
+dataModal.addEventListener('click', e => { if (e.target === dataModal) dataModal.classList.remove('open'); });
+
+document.getElementById('btnBackup').onclick = () => openData('Sao lưu dữ liệu',
+  'Lưu nội dung này (sao chép vào ghi chú hoặc tải file). Để khôi phục trên máy khác: mở bảng này, xoá nội dung, dán bản sao lưu rồi bấm “Khôi phục”.',
+  JSON.stringify({ exported: new Date().toISOString(), sessions: S.sessions }), { name: 'livestream-backup.json', type: 'application/json' }, true);
+document.getElementById('btnExport').onclick = () => {
+  const head = ['session', 'start', 'brand', 'staff', 'platform', 'shift', 'share', 'duration_min', 'viewers', 'orders', 'revenue'];
+  const r2 = v => Math.round(v * 100) / 100;
+  const lines = filtered().map(s => [s.id + 1, s.ts.replace('T', ' '), s.brand, s.host === HOST_NONE ? '' : hostName(s.host), s.p, s.shift, r2(s.w), r2(s.dur), r2(s.viewers), r2(s.orders), Math.round(s.revenue)].join(','));
+  openData('Xuất CSV', 'Các phiên theo bộ lọc hiện tại. Phiên kéo dài qua nhiều ca có một dòng cho mỗi ca, với phần đã chia (share). Sao chép rồi dán vào Excel / Google Sheets.',
+    [head.join(',')].concat(lines).join('\n'), { name: 'livestream-sessions.csv', type: 'text/csv', bom: true }, false);
+};
+const btnClear = document.getElementById('btnClear');
+let clearTimer = null;
+btnClear.onclick = () => {
+  if (!btnClear.dataset.armed) {
+    btnClear.dataset.armed = '1'; btnClear.textContent = 'Bấm lần nữa để xoá hết';
+    clearTimer = setTimeout(() => { delete btnClear.dataset.armed; btnClear.textContent = 'Xoá dữ liệu'; }, 4000);
+    return;
+  }
+  clearTimeout(clearTimer); delete btnClear.dataset.armed; btnClear.textContent = 'Xoá dữ liệu';
+  S.sessions = []; S.ver++; save(STORE_KEY, S.sessions); document.getElementById('log').textContent = ''; render();
+};
+
+/* ---------- shift editor ---------- */
+const modal = document.getElementById('shiftModal'), shiftRows = document.getElementById('shiftRows');
+let draft = [];
+function drawShiftRows() {
+  shiftRows.replaceChildren(
+    h('div', { class: 'shift-row', style: 'color:var(--muted);font-size:12px' }, h('span', null, 'Tên ca'), h('span', null, 'Từ'), h('span', null, 'Đến'), h('span')),
+    ...draft.map((s, i) => h('div', { class: 'shift-row' },
+      h('input', { id: 'shift-name-' + i, value: s.name, oninput: e => { s.name = e.target.value; drawShiftPreview(); } }),
+      h('input', { id: 'shift-from-' + i, type: 'time', value: s.from, oninput: e => { s.from = e.target.value; drawShiftPreview(); } }),
+      h('input', { id: 'shift-to-' + i, type: 'time', value: s.to, oninput: e => { s.to = e.target.value; drawShiftPreview(); } }),
+      h('button', { title: 'Xoá', onclick: () => { draft.splice(i, 1); drawShiftRows(); } }, '×'))),
+    h('div', { id: 'shiftPreview', class: 'log', style: 'margin-top:4px' }));
+  drawShiftPreview();
+}
+// Live preview: how the stored sessions would be split with the ranges being edited
+function drawShiftPreview() {
+  const box = document.getElementById('shiftPreview');
+  if (!box) return;
+  const counts = new Map();
+  const split = { mode: document.getElementById('splitMode').value, minOverlap: +document.getElementById('splitMin').value || 0 };
+  let crossing = 0;
+  for (const x of S.sessions) {
+    const parts = splitSession(x, draft, split);
+    if (parts.length > 1) crossing++;
+    for (const { shift, w } of parts) counts.set(shift, (counts.get(shift) || 0) + (document.getElementById('splitCount').value === 'split' ? w : 1));
+  }
+  const names = [...new Set(sortShifts(draft).map(d => d.name.trim()).filter(Boolean))].concat(OUT_SHIFT);
+  const lines = [];
+  for (const d of draft) if (d.name.trim() && toMin(d.from) === toMin(d.to)) lines.push(`⚠ ${d.name}: giờ bắt đầu và kết thúc trùng nhau nên ca này chưa có hiệu lực.`);
+  lines.push(S.sessions.length ? 'Số phiên theo khung giờ này: ' + names.filter(n => counts.get(n) || n !== OUT_SHIFT).map(n => `${n} ${nf1.format(counts.get(n) || 0)}`).join(' · ') : '');
+  if (S.sessions.length) lines.push(`${crossing} phiên kéo dài qua nhiều ca và được chia.`);
+  lines.push('Giờ nằm trong nhiều ca sẽ thuộc về ca bắt đầu muộn hơn.');
+  box.textContent = lines.filter(Boolean).join('\n');
+}
+document.getElementById('btnShifts').onclick = () => {
+  draft = S.shifts.map(s => ({ ...s }));
+  document.getElementById('splitMode').value = S.split.mode;
+  document.getElementById('splitMin').value = S.split.minOverlap;
+  document.getElementById('splitCount').value = S.split.count || 'whole';
+  drawShiftRows(); modal.classList.add('open');
+};
+document.getElementById('splitMode').onchange = drawShiftPreview;
+document.getElementById('splitMin').oninput = drawShiftPreview;
+document.getElementById('splitCount').onchange = drawShiftPreview;
+document.getElementById('shiftAdd').onclick = () => {
+  const last = sortShifts(draft).pop();
+  const from = last ? last.to : '09:00', t = (toMin(from) + 180) % 1440;
+  draft.push({ name: 'Ca ' + (draft.length + 1), from, to: pad(Math.floor(t / 60)) + ':' + pad(t % 60) });
+  drawShiftRows();
+};
+document.getElementById('shiftReset').onclick = () => { draft = DEFAULT_SHIFTS.map(s => ({ ...s })); drawShiftRows(); };
+document.getElementById('shiftCancel').onclick = () => modal.classList.remove('open');
+document.getElementById('shiftSave').onclick = () => {
+  S.shifts = sortShifts(draft.filter(s => s.name.trim() && s.from && s.to).map(s => ({ name: s.name.trim(), from: s.from, to: s.to })));
+  S.split = { mode: document.getElementById('splitMode').value, minOverlap: Math.max(0, +document.getElementById('splitMin').value || 0), count: document.getElementById('splitCount').value };
+  save(SHIFT_KEY, S.shifts); save(SPLIT_KEY, S.split); S.ui.shifts = []; modal.classList.remove('open'); render();
+};
+modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('open'); });
+
+/* ---------- theme: auto (system) / light / dark, remembered per browser ---------- */
+const THEME_KEY = 'wir.livestream.theme.v1';
+function applyTheme(t) {
+  if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
+  else document.documentElement.removeAttribute('data-theme');
+  document.querySelectorAll('[data-theme-opt]').forEach(b => {
+    const on = b.dataset.themeOpt === (t || 'auto');
+    b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+}
+function paintHourSeg() {
+  document.querySelectorAll('[data-hour-opt]').forEach(b => { const on = b.dataset.hourOpt === (S.ui.hourFmt || 'both'); b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+}
+document.querySelectorAll('[data-hour-opt]').forEach(b => b.addEventListener('click', () => { S.ui.hourFmt = b.dataset.hourOpt; saveUI(); paintHourSeg(); render(); }));
+paintHourSeg();
+document.querySelectorAll('[data-theme-opt]').forEach(b => b.addEventListener('click', () => {
+  const t = b.dataset.themeOpt;
+  try { localStorage.setItem(THEME_KEY, t); } catch (e) {}
+  applyTheme(t);
+}));
+applyTheme((() => { try { return localStorage.getItem(THEME_KEY) || 'auto'; } catch (e) { return 'auto'; } })());
+
+render();
+</script>

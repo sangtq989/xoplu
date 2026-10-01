@@ -1,0 +1,11 @@
+# only the dashboard page is published; the Excel data never leaves this machine
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+*.json
+~$*
+.DS_Store
+.claude/
+*_old.html
+livestream-dashboard.html
